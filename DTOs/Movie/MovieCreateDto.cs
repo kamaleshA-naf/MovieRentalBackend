@@ -1,0 +1,23 @@
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace MovieRentalApp.Models.DTOs
+{
+    public class MovieCreateDto
+    {
+        [Required(ErrorMessage = "Title is required.")]
+        public string Title { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        [Range(0.01, double.MaxValue,
+            ErrorMessage = "Rental price must be greater than zero.")]
+        public decimal RentalPrice { get; set; }
+
+        public string? Director { get; set; }
+        public int ReleaseYear { get; set; }
+        public double Rating { get; set; }
+        public List<int>? GenreIds { get; set; }
+        public string? VideoUrl { get; set; }
+        public string? ThumbnailUrl { get; set; }
+    }
+}
