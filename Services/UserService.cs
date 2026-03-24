@@ -10,20 +10,25 @@ namespace MovieRentalApp.Services
         private readonly IRepository<int, User> _userRepository;
         private readonly ITokenService _tokenService;
         private readonly IPasswordService _passwordService;
+        private readonly AuditLogService _auditLog;
 
         public UserService(
             IRepository<int, User> userRepository,
             ITokenService tokenService,
-            IPasswordService passwordService)
+            IPasswordService passwordService,
+            AuditLogService auditLog)
         {
             _userRepository = userRepository;
             _tokenService = tokenService;
             _passwordService = passwordService;
+            _auditLog = auditLog;
         }
 
+        // ── REGISTER ──────────────────────────────────────────────
         public async Task<UserResponseDto> Register(UserCreateDto dto)
         {
-            var existing = await _userRepository.FindAsync(u => u.UserEmail == dto.Email);
+            var existing = await _userRepository
+                .FindAsync(u => u.UserEmail == dto.Email);
             if (existing.Any())
                 throw new DuplicateEntityException(
                     $"A user with email '{dto.Email}' already exists.");
@@ -43,9 +48,18 @@ namespace MovieRentalApp.Services
             };
 
             var created = await _userRepository.AddAsync(user);
+
+            await _auditLog.LogAsync(
+                created.UserId,
+                created.UserName,
+                created.Role.ToString(),
+                $"New account registered with email '{dto.Email}'.",
+                "");
+
             return MapToDto(created);
         }
 
+        // ── LOGIN ─────────────────────────────────────────────────
         public async Task<LoginResponseDto> Login(LoginDto dto)
         {
             var users = await _userRepository
@@ -53,19 +67,17 @@ namespace MovieRentalApp.Services
             var user = users.FirstOrDefault();
 
             if (user == null)
-                throw new EntityNotFoundException(
-                    "Invalid email or password.");
+                throw new EntityNotFoundException("Invalid email or password.");
 
             if (!user.IsActive)
                 throw new UnauthorizedException(
-                    "Your account has been deactivated.");
+                    "Your account has been deactivated. Please contact support.");
 
             var hashed = _passwordService
                 .HashPassword(dto.Password, user.PasswordSaltValue, out _);
 
             if (!hashed.SequenceEqual(user.Password))
-                throw new UnauthorizedException(
-                    "Invalid email or password.");
+                throw new UnauthorizedException("Invalid email or password.");
 
             var token = _tokenService.CreateToken(new TokenPayloadDto
             {
@@ -73,6 +85,14 @@ namespace MovieRentalApp.Services
                 UserName = user.UserName,
                 Role = user.Role.ToString()
             });
+
+            // ✅ Audit: successful login
+            await _auditLog.LogAsync(
+                user.UserId,
+                user.UserName,
+                user.Role.ToString(),
+                $"User '{user.UserName}' ({user.Role}) logged in successfully.",
+                "");
 
             return new LoginResponseDto
             {
@@ -84,6 +104,7 @@ namespace MovieRentalApp.Services
             };
         }
 
+        // ── GET USER ──────────────────────────────────────────────
         public async Task<UserResponseDto> GetUser(int id)
         {
             var user = await _userRepository.GetByIdAsync(id);
@@ -92,14 +113,15 @@ namespace MovieRentalApp.Services
             return MapToDto(user);
         }
 
+        // ── GET ALL ───────────────────────────────────────────────
         public async Task<IEnumerable<UserResponseDto>> GetAllUsers()
         {
             var users = await _userRepository.GetAllAsync();
             return users.Select(MapToDto);
         }
 
-        public async Task<UserResponseDto> UpdateUser(
-            int id, UserUpdateDto dto)
+        // ── UPDATE ────────────────────────────────────────────────
+        public async Task<UserResponseDto> UpdateUser(int id, UserUpdateDto dto)
         {
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
@@ -112,6 +134,7 @@ namespace MovieRentalApp.Services
             return MapToDto(updated!);
         }
 
+        // ── DELETE ────────────────────────────────────────────────
         public async Task<UserResponseDto> DeleteUser(int id)
         {
             var user = await _userRepository.GetByIdAsync(id);
@@ -122,28 +145,24 @@ namespace MovieRentalApp.Services
             return MapToDto(user);
         }
 
+        // ── CHANGE PASSWORD ───────────────────────────────────────
         public async Task<string> ChangePassword(ChangePasswordDto dto)
         {
             if (dto.UserId <= 0)
-                throw new BusinessRuleViolationException(
-                    "Invalid user ID.");
+                throw new BusinessRuleViolationException("Invalid user ID.");
 
             var user = await _userRepository.GetByIdAsync(dto.UserId);
             if (user == null)
                 throw new EntityNotFoundException("User", dto.UserId);
 
-            // Verify old password matches
             var hashedOld = _passwordService
-                .HashPassword(dto.OldPassword,
-                              user.PasswordSaltValue, out _);
-
+                .HashPassword(dto.OldPassword, user.PasswordSaltValue, out _);
             if (!hashedOld.SequenceEqual(user.Password))
-                throw new UnauthorizedException(
-                    "Current password is incorrect.");
+                throw new UnauthorizedException("Current password is incorrect.");
 
             if (dto.OldPassword == dto.NewPassword)
                 throw new BusinessRuleViolationException(
-                    "New password cannot be the same as current password.");
+                    "New password cannot be the same as the current password.");
 
             if (dto.NewPassword.Length < 6)
                 throw new BusinessRuleViolationException(
@@ -156,9 +175,17 @@ namespace MovieRentalApp.Services
             user.PasswordSaltValue = newSalt!;
             await _userRepository.UpdateAsync(user.UserId, user);
 
+            await _auditLog.LogAsync(
+                user.UserId,
+                user.UserName,
+                user.Role.ToString(),
+                $"Password changed successfully for '{user.UserName}'.",
+                "");
+
             return "Password changed successfully.";
         }
 
+        // ── MAPPER ────────────────────────────────────────────────
         private static UserResponseDto MapToDto(User u) => new()
         {
             Id = u.UserId,

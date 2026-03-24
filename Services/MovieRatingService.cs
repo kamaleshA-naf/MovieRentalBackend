@@ -12,36 +12,36 @@ namespace MovieRentalApp.Services
         private readonly IRepository<int, User> _userRepository;
         private readonly IRepository<int, MovieGenre> _movieGenreRepository;
         private readonly IRepository<int, Genre> _genreRepository;
+        private readonly AuditLogService _auditLog;
 
         public MovieRatingService(
             IRepository<int, MovieRating> ratingRepository,
             IRepository<int, Movie> movieRepository,
             IRepository<int, User> userRepository,
             IRepository<int, MovieGenre> movieGenreRepository,
-            IRepository<int, Genre> genreRepository)
+            IRepository<int, Genre> genreRepository,
+            AuditLogService auditLog)
         {
             _ratingRepository = ratingRepository;
             _movieRepository = movieRepository;
             _userRepository = userRepository;
             _movieGenreRepository = movieGenreRepository;
             _genreRepository = genreRepository;
+            _auditLog = auditLog;
         }
 
-        // ── Rate Movie: Insert / Update / Toggle ──────────────────
+        // ── RATE MOVIE ────────────────────────────────────────────
         public async Task<MovieRatingResponseDto> RateMovie(
             int movieId, MovieRatingCreateDto dto)
         {
-            // Step 1 — Validate movie
             var movie = await _movieRepository.GetByIdAsync(movieId);
             if (movie == null)
                 throw new EntityNotFoundException("Movie", movieId);
 
-            // Step 2 — Validate user
             var user = await _userRepository.GetByIdAsync(dto.UserId);
             if (user == null)
                 throw new EntityNotFoundException("User", dto.UserId);
 
-            // Step 3 — Check existing rating (including soft-deleted)
             var existing = await _ratingRepository.FindAsync(
                 r => r.MovieId == movieId && r.UserId == dto.UserId);
 
@@ -51,21 +51,31 @@ namespace MovieRentalApp.Services
             {
                 rating = existing.First();
 
-                // Toggle logic: same value sent → remove rating
+                // Toggle: same value = remove rating
                 if (!rating.IsRemoved && rating.RatingValue == dto.RatingValue)
                 {
                     rating.IsRemoved = true;
                     rating.UpdatedAt = DateTime.UtcNow;
                     await _ratingRepository.UpdateAsync(rating.Id, rating);
 
+                    await _auditLog.LogAsync(
+                        user.UserId, user.UserName, user.Role.ToString(),
+                        $"Removed rating for '{movie.Title}'.", "");
+
                     return BuildResponse(rating, movie, user, removed: true);
                 }
 
-                // Update to new value or restore if was removed
+                // Update to new value
+                var oldLabel = GetLabel(rating.RatingValue);
                 rating.RatingValue = dto.RatingValue;
                 rating.IsRemoved = false;
                 rating.UpdatedAt = DateTime.UtcNow;
                 await _ratingRepository.UpdateAsync(rating.Id, rating);
+
+                await _auditLog.LogAsync(
+                    user.UserId, user.UserName, user.Role.ToString(),
+                    $"Updated rating for '{movie.Title}' from '{oldLabel}' " +
+                    $"to '{GetLabel(dto.RatingValue)}'.", "");
             }
             else
             {
@@ -79,43 +89,45 @@ namespace MovieRentalApp.Services
                     IsRemoved = false
                 };
                 await _ratingRepository.AddAsync(rating);
+
+                await _auditLog.LogAsync(
+                    user.UserId, user.UserName, user.Role.ToString(),
+                    $"Rated '{movie.Title}' as '{GetLabel(dto.RatingValue)}'.", "");
             }
 
             return BuildResponse(rating, movie, user, removed: false);
         }
 
-        // ── Remove Rating (explicit delete) ───────────────────────
-        public async Task<MovieRatingResponseDto> RemoveRating(
-            int movieId, int userId)
+        // ── REMOVE RATING ─────────────────────────────────────────
+        public async Task<MovieRatingResponseDto> RemoveRating(int movieId, int userId)
         {
             var existing = await _ratingRepository.FindAsync(
                 r => r.MovieId == movieId && r.UserId == userId);
-
             var rating = existing.FirstOrDefault();
             if (rating == null)
-                throw new EntityNotFoundException(
-                    "No rating found for this movie.");
+                throw new EntityNotFoundException("No rating found for this movie.");
 
             var movie = await _movieRepository.GetByIdAsync(movieId);
             var user = await _userRepository.GetByIdAsync(userId);
 
-            // Soft delete — keep record for analytics
             rating.IsRemoved = true;
             rating.UpdatedAt = DateTime.UtcNow;
             await _ratingRepository.UpdateAsync(rating.Id, rating);
 
+            await _auditLog.LogAsync(
+                userId, user!.UserName, user.Role.ToString(),
+                $"Explicitly removed rating for '{movie!.Title}'.", "");
+
             return BuildResponse(rating, movie!, user!, removed: true);
         }
 
-        // ── Get Movie Rating Summary ──────────────────────────────
-        public async Task<MovieRatingSummaryDto> GetMovieRatingSummary(
-            int movieId)
+        // ── GET SUMMARY ───────────────────────────────────────────
+        public async Task<MovieRatingSummaryDto> GetMovieRatingSummary(int movieId)
         {
             var movie = await _movieRepository.GetByIdAsync(movieId);
             if (movie == null)
                 throw new EntityNotFoundException("Movie", movieId);
 
-            // Only count active ratings (not soft-deleted)
             var ratings = (await _ratingRepository
                 .FindAsync(r => r.MovieId == movieId && !r.IsRemoved))
                 .ToList();
@@ -126,67 +138,54 @@ namespace MovieRentalApp.Services
                 MovieTitle = movie.Title,
                 TotalRatings = ratings.Count,
                 AverageRating = ratings.Any()
-                    ? Math.Round(ratings.Average(r => r.RatingValue), 1)
-                    : 0,
+                    ? Math.Round(ratings.Average(r => r.RatingValue), 1) : 0,
                 NotForMeCount = ratings.Count(r => r.RatingValue == 1),
                 LikeCount = ratings.Count(r => r.RatingValue == 2),
                 LoveCount = ratings.Count(r => r.RatingValue == 3)
             };
         }
 
-        // ── Get User's Rating for a Movie ─────────────────────────
+        // ── GET USER RATING FOR MOVIE ─────────────────────────────
         public async Task<MovieRatingResponseDto?> GetUserRatingForMovie(
             int movieId, int userId)
         {
             var ratings = await _ratingRepository.FindAsync(
-                r => r.MovieId == movieId &&
-                     r.UserId == userId &&
-                     !r.IsRemoved);
-
+                r => r.MovieId == movieId && r.UserId == userId && !r.IsRemoved);
             var rating = ratings.FirstOrDefault();
             if (rating == null) return null;
 
             var movie = await _movieRepository.GetByIdAsync(movieId);
             var user = await _userRepository.GetByIdAsync(userId);
-
             return BuildResponse(rating, movie!, user!, removed: false);
         }
 
-        // ── Get All Ratings by User ───────────────────────────────
-        public async Task<IEnumerable<MovieRatingResponseDto>> GetUserRatings(
-            int userId)
+        // ── GET USER RATINGS ──────────────────────────────────────
+        public async Task<IEnumerable<MovieRatingResponseDto>> GetUserRatings(int userId)
         {
             var ratings = await _ratingRepository
                 .GetAllWithIncludeAsync(r => r.Movie, r => r.User);
-
             return ratings
                 .Where(r => r.UserId == userId && !r.IsRemoved)
                 .OrderByDescending(r => r.RatedAt)
-                .Select(r => BuildResponse(
-                    r, r.Movie!, r.User!, removed: false));
+                .Select(r => BuildResponse(r, r.Movie!, r.User!, removed: false));
         }
 
-        // ── Get User Genre Preferences ────────────────────────────
-        public async Task<UserGenrePreferenceDto> GetUserGenrePreferences(
-            int userId)
+        // ── GET USER GENRE PREFERENCES ────────────────────────────
+        public async Task<UserGenrePreferenceDto> GetUserGenrePreferences(int userId)
         {
             var user = await _userRepository.GetByIdAsync(userId);
             if (user == null)
                 throw new EntityNotFoundException("User", userId);
 
-            // Only use active ratings for preference calculation
             var userRatings = (await _ratingRepository
                 .FindAsync(r => r.UserId == userId && !r.IsRemoved))
                 .ToList();
 
             var allGenres = await _genreRepository.GetAllAsync();
             var genreDict = allGenres.ToDictionary(g => g.Id, g => g.Name);
-            var movieGenres = (await _movieGenreRepository.GetAllAsync())
-                .ToList();
+            var movieGenres = (await _movieGenreRepository.GetAllAsync()).ToList();
 
-            // Map genre → list of rating values
             var genreRatings = new Dictionary<int, List<int>>();
-
             foreach (var rating in userRatings)
             {
                 var genres = movieGenres
@@ -204,8 +203,7 @@ namespace MovieRentalApp.Services
             var preferences = genreRatings.Select(kv => new GenreRatingDto
             {
                 GenreName = genreDict.ContainsKey(kv.Key)
-                                ? genreDict[kv.Key]
-                                : "Unknown",
+                                    ? genreDict[kv.Key] : "Unknown",
                 AverageRating = Math.Round(kv.Value.Average(), 1),
                 TotalRatings = kv.Value.Count
             })
@@ -220,12 +218,9 @@ namespace MovieRentalApp.Services
             };
         }
 
-        // ── Private Helpers ───────────────────────────────────────
+        // ── HELPERS ───────────────────────────────────────────────
         private static MovieRatingResponseDto BuildResponse(
-            MovieRating rating,
-            Movie movie,
-            User user,
-            bool removed) => new()
+            MovieRating rating, Movie movie, User user, bool removed) => new()
             {
                 Id = rating.Id,
                 MovieId = rating.MovieId,

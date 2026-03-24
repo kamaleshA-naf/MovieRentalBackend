@@ -13,42 +13,39 @@ namespace MovieRentalApp.Services
         private readonly IRepository<int, MovieGenre> _movieGenreRepository;
         private readonly IRepository<int, Genre> _genreRepository;
         private readonly IMemoryCache _cache;
+        private readonly AuditLogService _auditLog;
 
         private const string GenreCacheKey = "AllGenres";
-        private static readonly TimeSpan CacheDuration =
-            TimeSpan.FromMinutes(10);
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
 
         public MovieService(
             IRepository<int, Movie> movieRepository,
             IRepository<int, MovieGenre> movieGenreRepository,
             IRepository<int, Genre> genreRepository,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            AuditLogService auditLog)
         {
             _movieRepository = movieRepository;
             _movieGenreRepository = movieGenreRepository;
             _genreRepository = genreRepository;
             _cache = cache;
+            _auditLog = auditLog;
         }
 
+        // ── GENRE DICT ────────────────────────────────────────────
         private async Task<Dictionary<int, string>> BuildGenreDict()
         {
-            if (_cache.TryGetValue(
-                    GenreCacheKey,
-                    out Dictionary<int, string>? cached)
+            if (_cache.TryGetValue(GenreCacheKey, out Dictionary<int, string>? cached)
                 && cached != null)
                 return cached;
 
             var allGenres = await _genreRepository.GetAllAsync();
-            var dict = allGenres.ToDictionary(
-                g => g.Id,
-                g => g.Name ?? string.Empty);
-
+            var dict = allGenres.ToDictionary(g => g.Id, g => g.Name ?? string.Empty);
             _cache.Set(GenreCacheKey, dict,
                 new MemoryCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = CacheDuration
                 });
-
             return dict;
         }
 
@@ -85,12 +82,11 @@ namespace MovieRentalApp.Services
             };
         }
 
+        // ── ADD MOVIE ─────────────────────────────────────────────
         public async Task<MovieResponseDto> AddMovie(MovieCreateDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.Title))
-                throw new BusinessRuleViolationException(
-                    "Movie title cannot be empty.");
-
+                throw new BusinessRuleViolationException("Movie title cannot be empty.");
             if (dto.RentalPrice <= 0)
                 throw new BusinessRuleViolationException(
                     "Rental price must be greater than zero.");
@@ -116,15 +112,10 @@ namespace MovieRentalApp.Services
             {
                 foreach (var genreId in dto.GenreIds)
                 {
-                    var genre = await _genreRepository
-                        .GetByIdAsync(genreId);
+                    var genre = await _genreRepository.GetByIdAsync(genreId);
                     if (genre != null)
                         await _movieGenreRepository.AddAsync(
-                            new MovieGenre
-                            {
-                                MovieId = created.Id,
-                                GenreId = genreId
-                            });
+                            new MovieGenre { MovieId = created.Id, GenreId = genreId });
                 }
             }
 
@@ -134,11 +125,11 @@ namespace MovieRentalApp.Services
             return MapToDto(created, movieGenres, genreDict);
         }
 
+        // ── GET MOVIE ─────────────────────────────────────────────
         public async Task<MovieResponseDto> GetMovie(int id)
         {
             if (id <= 0)
-                throw new BusinessRuleViolationException(
-                    "Invalid movie ID.");
+                throw new BusinessRuleViolationException("Invalid movie ID.");
 
             var movie = await _movieRepository.GetByIdAsync(id);
             if (movie == null)
@@ -150,6 +141,7 @@ namespace MovieRentalApp.Services
             return MapToDto(movie, movieGenres, genreDict);
         }
 
+        // ── GET ALL (active only for customers) ───────────────────
         public async Task<PagedResultDto<MovieResponseDto>> GetAllMovies(
             PaginationDto pagination)
         {
@@ -171,13 +163,11 @@ namespace MovieRentalApp.Services
             var movieGenres = await _movieGenreRepository
                 .FindAsync(mg => movieIds.Contains(mg.MovieId));
             var genreDict = await BuildGenreDict();
-            var totalPages = (int)Math.Ceiling(
-                totalCount / (double)pagination.PageSize);
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pagination.PageSize);
 
             return new PagedResultDto<MovieResponseDto>
             {
-                Data = movies.Select(
-                    m => MapToDto(m, movieGenres, genreDict)),
+                Data = movies.Select(m => MapToDto(m, movieGenres, genreDict)),
                 TotalCount = totalCount,
                 PageNumber = pagination.PageNumber,
                 PageSize = pagination.PageSize,
@@ -187,12 +177,12 @@ namespace MovieRentalApp.Services
             };
         }
 
+        // ── SEARCH ────────────────────────────────────────────────
         public async Task<PagedResultDto<MovieResponseDto>> SearchMovies(
             string keyword, PaginationDto pagination)
         {
             if (string.IsNullOrWhiteSpace(keyword))
-                throw new BusinessRuleViolationException(
-                    "Search keyword cannot be empty.");
+                throw new BusinessRuleViolationException("Search keyword cannot be empty.");
 
             var kw = keyword.ToLower();
             var query = _movieRepository
@@ -205,8 +195,7 @@ namespace MovieRentalApp.Services
 
             var totalCount = await query.CountAsync();
             if (totalCount == 0)
-                throw new EntityNotFoundException(
-                    $"No movies found for '{keyword}'.");
+                throw new EntityNotFoundException($"No movies found for '{keyword}'.");
 
             var movies = await query
                 .Skip((pagination.PageNumber - 1) * pagination.PageSize)
@@ -217,13 +206,11 @@ namespace MovieRentalApp.Services
             var movieGenres = await _movieGenreRepository
                 .FindAsync(mg => movieIds.Contains(mg.MovieId));
             var genreDict = await BuildGenreDict();
-            var totalPages = (int)Math.Ceiling(
-                totalCount / (double)pagination.PageSize);
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pagination.PageSize);
 
             return new PagedResultDto<MovieResponseDto>
             {
-                Data = movies.Select(
-                    m => MapToDto(m, movieGenres, genreDict)),
+                Data = movies.Select(m => MapToDto(m, movieGenres, genreDict)),
                 TotalCount = totalCount,
                 PageNumber = pagination.PageNumber,
                 PageSize = pagination.PageSize,
@@ -233,12 +220,12 @@ namespace MovieRentalApp.Services
             };
         }
 
+        // ── BY GENRE ──────────────────────────────────────────────
         public async Task<PagedResultDto<MovieResponseDto>> GetMoviesByGenre(
             int genreId, PaginationDto pagination)
         {
             if (genreId <= 0)
-                throw new BusinessRuleViolationException(
-                    "Invalid genre ID.");
+                throw new BusinessRuleViolationException("Invalid genre ID.");
 
             var genreDict = await BuildGenreDict();
             if (!genreDict.ContainsKey(genreId))
@@ -250,9 +237,7 @@ namespace MovieRentalApp.Services
                 throw new EntityNotFoundException(
                     $"No movies found for genre ID {genreId}.");
 
-            var movieIds = genreMovies
-                .Select(mg => mg.MovieId).ToList();
-
+            var movieIds = genreMovies.Select(mg => mg.MovieId).ToList();
             var query = _movieRepository
                 .GetQueryable()
                 .Where(m => movieIds.Contains(m.Id) && m.IsActive)
@@ -267,13 +252,11 @@ namespace MovieRentalApp.Services
             var pagedIds = movies.Select(m => m.Id).ToList();
             var movieGenres = await _movieGenreRepository
                 .FindAsync(mg => pagedIds.Contains(mg.MovieId));
-            var totalPages = (int)Math.Ceiling(
-                totalCount / (double)pagination.PageSize);
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pagination.PageSize);
 
             return new PagedResultDto<MovieResponseDto>
             {
-                Data = movies.Select(
-                    m => MapToDto(m, movieGenres, genreDict)),
+                Data = movies.Select(m => MapToDto(m, movieGenres, genreDict)),
                 TotalCount = totalCount,
                 PageNumber = pagination.PageNumber,
                 PageSize = pagination.PageSize,
@@ -283,35 +266,31 @@ namespace MovieRentalApp.Services
             };
         }
 
-        public async Task<MovieResponseDto> UpdateMovie(
-            int id, MovieUpdateDto dto)
+        // ── UPDATE MOVIE ──────────────────────────────────────────
+        /// <summary>
+        /// Called by Admin to edit, pause (isActive=false) or activate (isActive=true).
+        /// Audit log is written by the caller (controller or AdminService) because
+        /// UpdateMovie doesn't know the admin's identity.
+        /// Pass adminUserId > 0 to enable audit logging here.
+        /// </summary>
+        public async Task<MovieResponseDto> UpdateMovie(int id, MovieUpdateDto dto)
         {
             if (id <= 0)
-                throw new BusinessRuleViolationException(
-                    "Invalid movie ID.");
+                throw new BusinessRuleViolationException("Invalid movie ID.");
 
             var movie = await _movieRepository.GetByIdAsync(id);
             if (movie == null)
                 throw new EntityNotFoundException("Movie", id);
 
-            if (!string.IsNullOrWhiteSpace(dto.Title))
-                movie.Title = dto.Title;
-            if (!string.IsNullOrWhiteSpace(dto.Description))
-                movie.Description = dto.Description;
-            if (dto.RentalPrice > 0)
-                movie.RentalPrice = dto.RentalPrice;
-            if (!string.IsNullOrWhiteSpace(dto.Director))
-                movie.Director = dto.Director;
-            if (dto.ReleaseYear > 0)
-                movie.ReleaseYear = dto.ReleaseYear;
-            if (dto.Rating > 0)
-                movie.Rating = dto.Rating;
-            if (dto.VideoUrl != null)
-                movie.VideoUrl = dto.VideoUrl;
-            if (dto.ThumbnailUrl != null)
-                movie.ThumbnailUrl = dto.ThumbnailUrl;
-            if (dto.IsActive.HasValue)
-                movie.IsActive = dto.IsActive.Value;
+            if (!string.IsNullOrWhiteSpace(dto.Title)) movie.Title = dto.Title;
+            if (!string.IsNullOrWhiteSpace(dto.Description)) movie.Description = dto.Description;
+            if (dto.RentalPrice > 0) movie.RentalPrice = dto.RentalPrice;
+            if (!string.IsNullOrWhiteSpace(dto.Director)) movie.Director = dto.Director;
+            if (dto.ReleaseYear > 0) movie.ReleaseYear = dto.ReleaseYear;
+            if (dto.Rating > 0) movie.Rating = dto.Rating;
+            if (dto.VideoUrl != null) movie.VideoUrl = dto.VideoUrl;
+            if (dto.ThumbnailUrl != null) movie.ThumbnailUrl = dto.ThumbnailUrl;
+            if (dto.IsActive.HasValue) movie.IsActive = dto.IsActive.Value;
 
             await _movieRepository.UpdateAsync(id, movie);
 
@@ -321,6 +300,7 @@ namespace MovieRentalApp.Services
             return MapToDto(movie, movieGenres, genreDict);
         }
 
+        // ── SOFT DELETE (sets IsActive=false) ─────────────────────
         public async Task<MovieResponseDto> DeleteMovie(int id)
         {
             if (id <= 0)
@@ -330,19 +310,16 @@ namespace MovieRentalApp.Services
             if (movie == null)
                 throw new EntityNotFoundException("Movie", id);
 
-            // Soft delete — keeps foreign key data intact
             movie.IsActive = false;
             await _movieRepository.UpdateAsync(id, movie);
 
-            // Need all 3 params for MapToDto
             var movieGenres = await _movieGenreRepository
                 .FindAsync(mg => mg.MovieId == id);
             var genreDict = await BuildGenreDict();
-
             return MapToDto(movie, movieGenres, genreDict);
         }
 
-
+        // ── TRENDING ─────────────────────────────────────────────
         public async Task<IEnumerable<MovieResponseDto>> GetTrendingMovies(
             List<int> movieIds)
         {
@@ -356,10 +333,8 @@ namespace MovieRentalApp.Services
 
                 var genres = await _movieGenreRepository
                     .FindAsync(mg => mg.MovieId == id);
-
                 result.Add(MapToDto(movie, genres, genreDict));
             }
-
             return result;
         }
     }

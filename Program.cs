@@ -1,6 +1,5 @@
 using AspNetCoreRateLimit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -21,13 +20,14 @@ namespace MovieRentalApp
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // ── Database ──────────────────────────────────────────
             builder.Services.AddDbContext<MovieContext>(options =>
                 options.UseSqlServer(
-                    builder.Configuration
-                           .GetConnectionString("Development")));
+                    builder.Configuration.GetConnectionString("Development")));
 
             builder.Services.AddMemoryCache();
 
+            // ── Repositories ──────────────────────────────────────
             builder.Services.AddScoped<IRepository<int, User>, Repository<int, User>>();
             builder.Services.AddScoped<IRepository<int, Movie>, Repository<int, Movie>>();
             builder.Services.AddScoped<IRepository<int, Rental>, Repository<int, Rental>>();
@@ -40,6 +40,10 @@ namespace MovieRentalApp
             builder.Services.AddScoped<IRepository<int, Cart>, Repository<int, Cart>>();
             builder.Services.AddScoped<IRepository<int, MovieRating>, Repository<int, MovieRating>>();
 
+            // ── Audit Log Service (register BEFORE services that use it) ──
+            builder.Services.AddScoped<AuditLogService>();
+
+            // ── Business Services ─────────────────────────────────
             builder.Services.AddScoped<IPasswordService, PasswordService>();
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IMovieService, MovieService>();
@@ -53,10 +57,7 @@ namespace MovieRentalApp
             builder.Services.AddScoped<ICartService, CartService>();
             builder.Services.AddScoped<IMovieRatingService, MovieRatingService>();
 
-
-            
-
-            #region CORS
+            // ── CORS ──────────────────────────────────────────────
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy =>
@@ -66,8 +67,8 @@ namespace MovieRentalApp
                           .AllowAnyHeader();
                 });
             });
-            #endregion
 
+            // ── JWT ───────────────────────────────────────────────
             var jwtKey = builder.Configuration["Keys:Jwt"];
             if (string.IsNullOrEmpty(jwtKey))
                 throw new InvalidOperationException(
@@ -78,24 +79,25 @@ namespace MovieRentalApp
                 .AddJwtBearer(options =>
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
-                        
-                        {
-                            ValidateIssuer = true,
-                            ValidateAudience = true,
-                            ValidateLifetime = true,
-                            ValidateIssuerSigningKey = true,
-                            ValidIssuer = "MovieRentalApp",
-                            ValidAudience = "MovieRentalApp",
-                            IssuerSigningKey =  new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
-                        };
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = "MovieRentalApp",
+                        ValidAudience = "MovieRentalApp",
+                        IssuerSigningKey = new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(jwtKey))
+                    };
                 });
 
+            // ── Rate Limiting ─────────────────────────────────────
             builder.Services.Configure<IpRateLimitOptions>(
                 builder.Configuration.GetSection("IpRateLimiting"));
             builder.Services.AddInMemoryRateLimiting();
-            builder.Services.AddSingleton<IRateLimitConfiguration,
-                RateLimitConfiguration>();
+            builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
+            // ── MVC / Swagger ─────────────────────────────────────
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
 
@@ -106,52 +108,60 @@ namespace MovieRentalApp
                     Title = "Movie Rental API",
                     Version = "v1"
                 });
-                options.AddSecurityDefinition("Bearer",
-                    new OpenApiSecurityScheme
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "Bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Enter your JWT token."
+                });
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
                     {
-                        Name = "Authorization",
-                        Type = SecuritySchemeType.Http,
-                        Scheme = "Bearer",
-                        BearerFormat = "JWT",
-                        In = ParameterLocation.Header,
-                        Description = "Enter your JWT token."
-                    });
-                options.AddSecurityRequirement(
-                    new OpenApiSecurityRequirement
-                    {
+                        new OpenApiSecurityScheme
                         {
-                            new OpenApiSecurityScheme
+                            Reference = new OpenApiReference
                             {
-                                Reference = new OpenApiReference
-                                {
-                                    Type = ReferenceType.SecurityScheme,
-                                    Id   = "Bearer"
-                                }
-                            },
-                            new string[] {}
-                        }
-                    });
+                                Type = ReferenceType.SecurityScheme,
+                                Id   = "Bearer"
+                            }
+                        },
+                        new string[] {}
+                    }
+                });
             });
 
+            // ── Build App ─────────────────────────────────────────
             var app = builder.Build();
 
+            // ── 1. Global Exception Handler ───────────────────────
             app.UseMiddleware<GlobalExceptionMiddleware>();
 
+            // ── 2. Video Streaming Middleware ─────────────────────
+            // Intercepts video file requests BEFORE UseStaticFiles
+            // and returns HTTP 206 Partial Content with correct
+            // byte-range chunks so the browser can seek/lazy-load.
+            app.UseMiddleware<VideoStreamingMiddleware>();
+
+            // ── 3. Swagger (dev only) ─────────────────────────────
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
                 app.UseSwaggerUI(options =>
                 {
-                    options.SwaggerEndpoint(
-                        "/swagger/v1/swagger.json",
-                        "Movie Rental API v1");
+                    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Movie Rental API v1");
                     options.RoutePrefix = "swagger";
                 });
             }
 
+            // ── 4. HTTPS redirect ─────────────────────────────────
             app.UseHttpsRedirection();
 
-            
+            // ── 5. Static Files (thumbnails / images / non-video) ─
+            // Videos are already handled by VideoStreamingMiddleware.
+            // UseStaticFiles still serves thumbnails, icons, etc.
             var mimeProvider = new FileExtensionContentTypeProvider();
             mimeProvider.Mappings[".mp4"] = "video/mp4";
             mimeProvider.Mappings[".webm"] = "video/webm";
@@ -159,18 +169,20 @@ namespace MovieRentalApp
             mimeProvider.Mappings[".mkv"] = "video/x-matroska";
             mimeProvider.Mappings[".avi"] = "video/x-msvideo";
             mimeProvider.Mappings[".m3u8"] = "application/x-mpegURL";
+            mimeProvider.Mappings[".mov"] = "video/quicktime";
 
             app.UseStaticFiles(new StaticFileOptions
             {
                 ContentTypeProvider = mimeProvider,
                 OnPrepareResponse = ctx =>
                 {
-                   
                     ctx.Context.Response.Headers["Accept-Ranges"] = "bytes";
                     ctx.Context.Response.Headers["Access-Control-Allow-Origin"] = "*";
+                    ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=3600";
                 }
             });
 
+            // ── 6. Remaining middleware ───────────────────────────
             app.UseCors();
             app.UseAuthentication();
             app.UseAuthorization();

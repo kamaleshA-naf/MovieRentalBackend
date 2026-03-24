@@ -53,6 +53,7 @@ namespace MovieRentalApp.Services
             if (user == null)
                 throw new EntityNotFoundException("User", userId);
 
+            // Include Movie so ThumbnailUrl is available
             var wishlists = await _wishlistRepository
                 .GetAllWithIncludeAsync(w => w.Movie);
 
@@ -71,6 +72,7 @@ namespace MovieRentalApp.Services
             await _wishlistRepository.DeleteAsync(id);
         }
 
+        // ── KEY FIX: now reads movie.ThumbnailUrl ────────────────
         private static WishlistResponseDto MapToDto(Wishlist w, Movie movie) => new()
         {
             Id = w.Id,
@@ -78,7 +80,8 @@ namespace MovieRentalApp.Services
             MovieId = w.MovieId,
             MovieTitle = movie.Title,
             RentalPrice = movie.RentalPrice,
-            AddedDate = w.AddedDate
+            AddedDate = w.AddedDate,
+            ThumbnailUrl = movie.ThumbnailUrl   // ← THIS was missing
         };
     }
 }
