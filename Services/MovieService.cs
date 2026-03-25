@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using MovieRentalApp.Contexts;
 using Microsoft.Extensions.Caching.Memory;
 using MovieRentalApp.Models.DTOs;
 using MovieRentalApp.Exceptions;
@@ -14,6 +15,7 @@ namespace MovieRentalApp.Services
         private readonly IRepository<int, Genre> _genreRepository;
         private readonly IMemoryCache _cache;
         private readonly AuditLogService _auditLog;
+        private readonly MovieContext _context;
 
         private const string GenreCacheKey = "AllGenres";
         private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(10);
@@ -23,13 +25,15 @@ namespace MovieRentalApp.Services
             IRepository<int, MovieGenre> movieGenreRepository,
             IRepository<int, Genre> genreRepository,
             IMemoryCache cache,
-            AuditLogService auditLog)
+            AuditLogService auditLog,
+            MovieContext context)
         {
             _movieRepository = movieRepository;
             _movieGenreRepository = movieGenreRepository;
             _genreRepository = genreRepository;
             _cache = cache;
             _auditLog = auditLog;
+            _context = context;
         }
 
         // ── GENRE DICT ────────────────────────────────────────────
@@ -336,6 +340,17 @@ namespace MovieRentalApp.Services
                 result.Add(MapToDto(movie, genres, genreDict));
             }
             return result;
+        }
+        // ── INCREMENT VIEW COUNT ──────────────────────────────────
+        // Uses ExecuteUpdateAsync — single SQL UPDATE, no entity load.
+        // Only increments when IsActive = true (soft-deleted movies have IsActive = false).
+        public async Task<bool> IncrementViewCountAsync(int id)
+        {
+            var updated = await _context.Movies
+                .Where(m => m.Id == id && m.IsActive)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.ViewCount, m => m.ViewCount + 1));
+
+            return updated > 0;
         }
     }
 }

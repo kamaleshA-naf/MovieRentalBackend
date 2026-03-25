@@ -139,12 +139,6 @@ namespace MovieRentalApp
             // ── 1. Global Exception Handler ───────────────────────
             app.UseMiddleware<GlobalExceptionMiddleware>();
 
-            // ── 2. Video Streaming Middleware ─────────────────────
-            // Intercepts video file requests BEFORE UseStaticFiles
-            // and returns HTTP 206 Partial Content with correct
-            // byte-range chunks so the browser can seek/lazy-load.
-            app.UseMiddleware<VideoStreamingMiddleware>();
-
             // ── 3. Swagger (dev only) ─────────────────────────────
             if (app.Environment.IsDevelopment())
             {

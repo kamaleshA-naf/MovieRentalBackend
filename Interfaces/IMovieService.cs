@@ -12,5 +12,6 @@ namespace MovieRentalApp.Interfaces
         Task<IEnumerable<MovieResponseDto>> GetTrendingMovies(List<int> movieIds);
         Task<MovieResponseDto> UpdateMovie(int id, MovieUpdateDto dto);
         Task<MovieResponseDto> DeleteMovie(int id);
+        Task<bool> IncrementViewCountAsync(int id);
     }
 }

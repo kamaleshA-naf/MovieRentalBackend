@@ -405,6 +405,22 @@
   },
   {
     "ContainingType": "MovieRentalApp.Controllers.MovieController",
+    "Method": "StreamVideo",
+    "RelativePath": "api/Movie/{id}/stream",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "id",
+        "Type": "System.Int32",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "MovieRentalApp.Controllers.MovieController",
     "Method": "IncrementView",
     "RelativePath": "api/Movie/{id}/view",
     "HttpMethod": "PUT",

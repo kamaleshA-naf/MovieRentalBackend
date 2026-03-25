@@ -173,12 +173,47 @@ namespace MovieRentalApp.Controllers
             catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
         }
 
+        // ── STREAM VIDEO ──────────────────────────────────────────
+        // Serves the video file from disk with proper 206 range support.
+        // Frontend: <video src="/api/movie/5/stream" controls />
+        [HttpGet("{id}/stream")]
+        [Authorize]
+        public async Task<IActionResult> StreamVideo(int id)
+        {
+            if (id <= 0) return BadRequest(new { message = "Invalid movie ID." });
+            try
+            {
+                var movie = await _movieService.GetMovie(id);
+
+                if (string.IsNullOrEmpty(movie.VideoUrl))
+                    return NotFound(new { message = "No video available for this movie." });
+
+                // VideoUrl is stored as "/uploads/movies/filename.mp4"
+                var relativePath = movie.VideoUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                var filePath = Path.Combine(_env.WebRootPath ?? "wwwroot", relativePath);
+
+                if (!System.IO.File.Exists(filePath))
+                    return NotFound(new { message = "Video file not found on server." });
+
+                // PhysicalFile with EnableRangeProcessing=true handles all
+                // Range header parsing, 206 responses, and Content-Range headers.
+                return PhysicalFile(filePath, "video/mp4", enableRangeProcessing: true);
+            }
+            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+        }
+
         // ── INCREMENT VIEW ────────────────────────────────────────
         [HttpPut("{id}/view")]
         [AllowAnonymous]
-        public IActionResult IncrementView(int id)
+        public async Task<IActionResult> IncrementView(int id)
         {
             if (id <= 0) return BadRequest(new { message = "Invalid movie ID." });
+
+            var incremented = await _movieService.IncrementViewCountAsync(id);
+            if (!incremented)
+                return NotFound(new { message = "Movie not found or is inactive." });
+
             return Ok(new { message = "View counted." });
         }
 

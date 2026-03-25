@@ -1,0 +1,9 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\Controllers",
+    "\\Middleware"
+  ],
+  "SelectedNode": "\\Middleware\\GlobalExceptionMiddleware.cs",
+  "PreviewInSolutionExplorer": false
+}
