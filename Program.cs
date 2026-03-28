@@ -69,7 +69,7 @@ namespace MovieRentalApp
             });
 
             // ── JWT ───────────────────────────────────────────────
-            var jwtKey = builder.Configuration["Keys:Jwt"];
+            var jwtKey = builder.Configuration["Keys:Jwt"] ?? builder.Configuration["keys:Jwt"];
             if (string.IsNullOrEmpty(jwtKey))
                 throw new InvalidOperationException(
                     "JWT Key is missing from appsettings.json.");
@@ -139,6 +139,9 @@ namespace MovieRentalApp
             // ── 1. Global Exception Handler ───────────────────────
             app.UseMiddleware<GlobalExceptionMiddleware>();
 
+            // ── 2. CORS — must be first, before auth and routing ──
+            app.UseCors();
+
             // ── 3. Swagger (dev only) ─────────────────────────────
             if (app.Environment.IsDevelopment())
             {
@@ -153,9 +156,7 @@ namespace MovieRentalApp
             // ── 4. HTTPS redirect ─────────────────────────────────
             app.UseHttpsRedirection();
 
-            // ── 5. Static Files (thumbnails / images / non-video) ─
-            // Videos are already handled by VideoStreamingMiddleware.
-            // UseStaticFiles still serves thumbnails, icons, etc.
+            // ── 5. Static Files ───────────────────────────────────
             var mimeProvider = new FileExtensionContentTypeProvider();
             mimeProvider.Mappings[".mp4"] = "video/mp4";
             mimeProvider.Mappings[".webm"] = "video/webm";
@@ -176,8 +177,7 @@ namespace MovieRentalApp
                 }
             });
 
-            // ── 6. Remaining middleware ───────────────────────────
-            app.UseCors();
+            // ── 6. Auth & routing ─────────────────────────────────
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseIpRateLimiting();

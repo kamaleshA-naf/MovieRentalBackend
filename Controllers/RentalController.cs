@@ -110,5 +110,22 @@ namespace MovieRentalApp.Controllers
             catch (Exception ex)
             { return StatusCode(500, new { message = ex.Message }); }
         }
+
+        // GET /api/Rental/user/{userId}/movie/{movieId}/eligible
+        // Returns true if user has a Returned or Expired rental for this movie
+        [HttpGet("user/{userId}/movie/{movieId}/eligible")]
+        [Authorize(Roles = "Customer,Admin")]
+        public async Task<IActionResult> CheckRatingEligibility(int userId, int movieId)
+        {
+            if (userId <= 0 || movieId <= 0)
+                return BadRequest(new { message = "Invalid ID." });
+            try
+            {
+                var eligible = await _rentalService.IsEligibleToRateAsync(userId, movieId);
+                return Ok(new { eligible });
+            }
+            catch (Exception ex)
+            { return StatusCode(500, new { message = ex.Message }); }
+        }
     }
 }

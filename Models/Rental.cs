@@ -9,11 +9,10 @@
         public Movie Movie { get; set; } = null!;
         public DateTime RentalDate { get; set; }
         public DateTime ExpiryDate { get; set; }
+        public DateTime? ReturnDate { get; set; }
 
-       
         public string StoredStatus { get; set; } = "Active";
 
-        
         public string Status =>
             StoredStatus == "Returned"
                 ? "Returned"

@@ -10,6 +10,7 @@
         public int ReleaseYear { get; set; }
         public double Rating { get; set; }
         public bool IsActive { get; set; }
+        public string Language { get; set; } = string.Empty;
         public string? VideoUrl { get; set; }
         public string? ThumbnailUrl { get; set; }
         public int ViewCount { get; set; }

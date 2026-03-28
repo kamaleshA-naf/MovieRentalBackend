@@ -6,7 +6,13 @@ namespace MovieRentalApp.Interfaces
     {
         Task<MovieResponseDto> AddMovie(MovieCreateDto dto);
         Task<MovieResponseDto> GetMovie(int id);
-        Task<PagedResultDto<MovieResponseDto>> GetAllMovies(PaginationDto pagination);
+        Task<PagedResultDto<MovieResponseDto>> GetAllMovies(
+            PaginationDto pagination,
+            int? genreId = null,
+            string? language = null,
+            double? minRating = null,
+            string sortBy = "Id",
+            string sortDirection = "desc");
         Task<PagedResultDto<MovieResponseDto>> SearchMovies(string keyword, PaginationDto pagination);
         Task<PagedResultDto<MovieResponseDto>> GetMoviesByGenre(int genreId, PaginationDto pagination);
         Task<IEnumerable<MovieResponseDto>> GetTrendingMovies(List<int> movieIds);

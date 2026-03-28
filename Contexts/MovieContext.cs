@@ -193,6 +193,10 @@ namespace MovieRentalApp.Contexts
                 .HasIndex(m => m.Director)
                 .HasDatabaseName("IX_Movie_Director");
 
+            modelBuilder.Entity<Movie>()
+                .HasIndex(m => m.Language)
+                .HasDatabaseName("IX_Movie_Language");
+
             modelBuilder.Entity<MovieGenre>()
                 .HasIndex(mg => mg.GenreId)
                 .HasDatabaseName("IX_MovieGenre_GenreId");

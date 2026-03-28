@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using MovieRentalApp.Exceptions;
 using MovieRentalApp.Interfaces;
 using MovieRentalApp.Models.DTOs;
+using System.Security.Claims;
 
 namespace MovieRentalApp.Controllers
 {
@@ -12,29 +13,43 @@ namespace MovieRentalApp.Controllers
     public class MovieRatingController : ControllerBase
     {
         private readonly IMovieRatingService _ratingService;
+        private readonly IRentalService _rentalService;
 
-        public MovieRatingController(IMovieRatingService ratingService)
+        public MovieRatingController(
+            IMovieRatingService ratingService,
+            IRentalService rentalService)
         {
             _ratingService = ratingService;
+            _rentalService = rentalService;
         }
 
+        private int GetUserId() =>
+            int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : 0;
+
         // POST /api/Movie/{id}/rate
-        // Send same value again → removes the rating (toggle)
-        // Send different value → updates the rating
+        // Body: { "ratingValue": 1|2|3 }
         [HttpPost("{id}/rate")]
         [Authorize(Roles = "Customer")]
         public async Task<IActionResult> RateMovie(
             int id, [FromBody] MovieRatingCreateDto dto)
         {
-            if (id <= 0)
-                return BadRequest(new { message = "Invalid movie ID." });
+            if (id <= 0) return BadRequest(new { message = "Invalid movie ID." });
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
+            var userId = GetUserId();
+            if (userId <= 0) return Unauthorized(new { message = "Invalid token." });
+
+            // Block rating if user has not rented + watched/expired this movie
+            var eligible = await _rentalService.IsEligibleToRateAsync(userId, id);
+            if (!eligible)
+                return StatusCode(403, new
+                {
+                    message = "You can rate this movie only after renting it."
+                });
 
             try
             {
-                var result = await _ratingService.RateMovie(id, dto);
+                var result = await _ratingService.RateMovie(id, userId, dto);
                 return Ok(result);
             }
             catch (EntityNotFoundException ex)
@@ -50,8 +65,10 @@ namespace MovieRentalApp.Controllers
         [Authorize(Roles = "Customer")]
         public async Task<IActionResult> RemoveRating(int id, int userId)
         {
-            if (id <= 0 || userId <= 0)
-                return BadRequest(new { message = "Invalid ID." });
+            if (id <= 0 || userId <= 0) return BadRequest(new { message = "Invalid ID." });
+
+            var tokenUserId = GetUserId();
+            if (tokenUserId != userId) return Forbid();
 
             try
             {
@@ -64,18 +81,23 @@ namespace MovieRentalApp.Controllers
             { return StatusCode(500, new { message = ex.Message }); }
         }
 
-        // GET /api/Movie/{id}/ratings
+        // GET /api/Movie/{id}/ratings?pageNumber=1&pageSize=10
+        // Returns paginated latest ratings for a movie
         [HttpGet("{id}/ratings")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetRatingSummary(int id)
+        public async Task<IActionResult> GetRatingSummary(
+            int id,
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            if (id <= 0)
-                return BadRequest(new { message = "Invalid movie ID." });
-
+            if (id <= 0) return BadRequest(new { message = "Invalid movie ID." });
             try
             {
-                var result = await _ratingService.GetMovieRatingSummary(id);
-                return Ok(result);
+                var summary = await _ratingService.GetMovieRatingSummary(id);
+                var paginated = await _ratingService.GetMovieRatingsPaginatedAsync(
+                    id, pageNumber, pageSize);
+                summary.LatestRatings = paginated;
+                return Ok(summary);
             }
             catch (EntityNotFoundException ex)
             { return NotFound(new { message = ex.Message }); }
@@ -84,27 +106,26 @@ namespace MovieRentalApp.Controllers
         }
 
         // GET /api/Movie/{id}/rating/user/{userId}
+        // Returns user's current rating + canRate eligibility in one call
         [HttpGet("{id}/rating/user/{userId}")]
         [Authorize(Roles = "Customer,Admin")]
         public async Task<IActionResult> GetUserRating(int id, int userId)
         {
-            if (id <= 0 || userId <= 0)
-                return BadRequest(new { message = "Invalid ID." });
-
+            if (id <= 0 || userId <= 0) return BadRequest(new { message = "Invalid ID." });
             try
             {
-                var result = await _ratingService
-                    .GetUserRatingForMovie(id, userId);
-
-                // Return 0 if not rated — not a 404
-                return Ok(result ?? new MovieRatingResponseDto
-                {
-                    MovieId = id,
-                    UserId = userId,
-                    RatingValue = 0,
-                    RatingLabel = "Not rated",
-                    IsRemoved = false
-                });
+                var eligible = await _rentalService.IsEligibleToRateAsync(userId, id);
+                var result = await _ratingService.GetUserRatingForMovie(id, userId)
+                    ?? new MovieRatingResponseDto
+                    {
+                        MovieId = id,
+                        UserId = userId,
+                        RatingValue = 0,
+                        RatingLabel = "Not rated",
+                        IsRemoved = false
+                    };
+                result.CanRate = eligible;
+                return Ok(result);
             }
             catch (Exception ex)
             { return StatusCode(500, new { message = ex.Message }); }
@@ -115,9 +136,7 @@ namespace MovieRentalApp.Controllers
         [Authorize(Roles = "Customer,Admin")]
         public async Task<IActionResult> GetUserRatings(int userId)
         {
-            if (userId <= 0)
-                return BadRequest(new { message = "Invalid user ID." });
-
+            if (userId <= 0) return BadRequest(new { message = "Invalid user ID." });
             try
             {
                 var result = await _ratingService.GetUserRatings(userId);

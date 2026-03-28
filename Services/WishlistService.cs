@@ -72,6 +72,16 @@ namespace MovieRentalApp.Services
             await _wishlistRepository.DeleteAsync(id);
         }
 
+        // Safe removal by userId+movieId — used when renting, no exception if not found
+        public async Task RemoveByUserAndMovieAsync(int userId, int movieId)
+        {
+            var items = await _wishlistRepository.FindAsync(
+                w => w.UserId == userId && w.MovieId == movieId);
+            var item = items.FirstOrDefault();
+            if (item != null)
+                await _wishlistRepository.DeleteAsync(item.Id);
+        }
+
         // ── KEY FIX: now reads movie.ThumbnailUrl ────────────────
         private static WishlistResponseDto MapToDto(Wishlist w, Movie movie) => new()
         {

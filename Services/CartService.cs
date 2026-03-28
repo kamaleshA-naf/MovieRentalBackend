@@ -179,13 +179,17 @@ namespace MovieRentalApp.Services
                 await _rentalRepository.AddAsync(rental);
 
                 var amount = movie.RentalPrice * cartItem.DurationDays;
+
+                var validMethods = new[] { "UPI", "Card", "NetBanking" };
+                var method = validMethods.Contains(dto.PaymentMethod) ? dto.PaymentMethod : "UPI";
+
                 await _paymentRepository.AddAsync(new Payment
                 {
                     UserId = dto.UserId,
                     RentalId = rental.Id,
                     MovieId = movie.Id,
                     Amount = amount,
-                    Method = "Online",
+                    Method = method,
                     Status = "Completed",
                     PaymentDate = DateTime.UtcNow
                 });

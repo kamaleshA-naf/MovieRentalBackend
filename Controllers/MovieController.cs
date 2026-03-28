@@ -44,7 +44,7 @@ namespace MovieRentalApp.Controllers
             User.FindFirst(ClaimTypes.Role)?.Value ?? "Unknown";
 
         // ── ADD MOVIE ─────────────────────────────────────────────
-        [HttpPost("AddMovie")]
+        [HttpPost("add")]
         [Authorize(Roles = "Admin,ContentManager")]
         public async Task<IActionResult> AddMovie([FromBody] MovieCreateDto dto)
         {
@@ -203,8 +203,31 @@ namespace MovieRentalApp.Controllers
             catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
         }
 
-        // ── INCREMENT VIEW ────────────────────────────────────────
-        [HttpPut("{id}/view")]
+        // ── WATCH (increment ViewCount + return movie) ────────────
+        // POST /api/movie/{id}/watch
+        // Frontend calls this on "Watch Now" click
+        [HttpPost("{id}/watch")]
+        [AllowAnonymous]
+        public async Task<IActionResult> WatchMovie(int id)
+        {
+            if (id <= 0) return BadRequest(new { message = "Invalid movie ID." });
+            try
+            {
+                var incremented = await _movieService.IncrementViewCountAsync(id);
+                if (!incremented)
+                    return NotFound(new { message = "Movie not found or is inactive." });
+
+                // Return updated movie so frontend has fresh ViewCount
+                var movie = await _movieService.GetMovie(id);
+                return Ok(movie);
+            }
+            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+        }
+
+        // ── INCREMENT VIEW (kept for backward compat) ─────────────
+        // POST /api/movie/{id}/view
+        [HttpPost("{id}/view")]
         [AllowAnonymous]
         public async Task<IActionResult> IncrementView(int id)
         {
@@ -233,20 +256,28 @@ namespace MovieRentalApp.Controllers
         }
 
         // ── GET ALL ───────────────────────────────────────────────
+        // Supports infinite scroll + filters
+        // GET /api/Movie?pageNumber=1&pageSize=20&genreId=1&language=Tamil&minRating=3&sortBy=Title&sortDirection=asc
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> GetAllMovies(
             [FromQuery] int pageNumber = 1,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int pageSize = 20,
+            [FromQuery] int? genreId = null,
+            [FromQuery] string? language = null,
+            [FromQuery] double? minRating = null,
+            [FromQuery] string sortBy = "Id",
+            [FromQuery] string sortDirection = "desc")
         {
             var pagination = new PaginationDto { PageNumber = pageNumber, PageSize = pageSize };
             try
             {
-                var result = await _movieService.GetAllMovies(pagination);
+                var result = await _movieService.GetAllMovies(
+                    pagination, genreId, language, minRating, sortBy, sortDirection);
                 return Ok(result);
             }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            catch (Exception ex)
+            { return StatusCode(500, new { message = ex.Message }); }
         }
 
         // ── SEARCH ────────────────────────────────────────────────
@@ -293,31 +324,22 @@ namespace MovieRentalApp.Controllers
         }
 
         // ── TRENDING ──────────────────────────────────────────────
+        // GET /api/movie/trending?top=10
+        // Returns top movies ordered by ViewCount DESC
         [HttpGet("trending")]
         [AllowAnonymous]
-        public async Task<IActionResult> GetTrendingMovies([FromQuery] int top = 5)
+        public async Task<IActionResult> GetTrendingMovies([FromQuery] int top = 10)
         {
             try
             {
-                var cutoff = DateTime.UtcNow.AddDays(-7);
-                var trendingIds = await _context.Rentals
-                    .Where(r => r.RentalDate >= cutoff)
-                    .GroupBy(r => r.MovieId)
-                    .Select(g => new { MovieId = g.Key, Count = g.Count() })
-                    .OrderByDescending(x => x.Count)
+                // Always use ViewCount — most watched = trending
+                var trendingIds = await _context.Movies
+                    .Where(m => m.IsActive)
+                    .OrderByDescending(m => m.ViewCount)
+                    .ThenByDescending(m => m.CreatedAt)
                     .Take(top)
-                    .Select(x => x.MovieId)
+                    .Select(m => m.Id)
                     .ToListAsync();
-
-                if (!trendingIds.Any())
-                {
-                    trendingIds = await _context.Movies
-                        .Where(m => m.IsActive)
-                        .OrderByDescending(m => m.CreatedAt)
-                        .Take(top)
-                        .Select(m => m.Id)
-                        .ToListAsync();
-                }
 
                 var result = await _movieService.GetTrendingMovies(trendingIds);
                 return Ok(result);

@@ -101,7 +101,7 @@ namespace MovieRentalApp.Services
             MovieId = p.MovieId,
             MovieTitle = p.Movie?.Title ?? "",
             RentalId = p.RentalId,
-            Amount = p.Amount,
+            Amount = p.Amount < 0 ? 0 : p.Amount,
             Method = p.Method,
             Status = p.Status,
             PaidAt = p.PaymentDate

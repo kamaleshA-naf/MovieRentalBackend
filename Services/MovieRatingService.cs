@@ -1,4 +1,6 @@
-﻿using MovieRentalApp.Exceptions;
+﻿using Microsoft.EntityFrameworkCore;
+using MovieRentalApp.Contexts;
+using MovieRentalApp.Exceptions;
 using MovieRentalApp.Interfaces;
 using MovieRentalApp.Models;
 using MovieRentalApp.Models.DTOs;
@@ -13,6 +15,7 @@ namespace MovieRentalApp.Services
         private readonly IRepository<int, MovieGenre> _movieGenreRepository;
         private readonly IRepository<int, Genre> _genreRepository;
         private readonly AuditLogService _auditLog;
+        private readonly MovieContext _context;
 
         public MovieRatingService(
             IRepository<int, MovieRating> ratingRepository,
@@ -20,7 +23,8 @@ namespace MovieRentalApp.Services
             IRepository<int, User> userRepository,
             IRepository<int, MovieGenre> movieGenreRepository,
             IRepository<int, Genre> genreRepository,
-            AuditLogService auditLog)
+            AuditLogService auditLog,
+            MovieContext context)
         {
             _ratingRepository = ratingRepository;
             _movieRepository = movieRepository;
@@ -28,22 +32,23 @@ namespace MovieRentalApp.Services
             _movieGenreRepository = movieGenreRepository;
             _genreRepository = genreRepository;
             _auditLog = auditLog;
+            _context = context;
         }
 
         // ── RATE MOVIE ────────────────────────────────────────────
         public async Task<MovieRatingResponseDto> RateMovie(
-            int movieId, MovieRatingCreateDto dto)
+            int movieId, int userId, MovieRatingCreateDto dto)
         {
             var movie = await _movieRepository.GetByIdAsync(movieId);
             if (movie == null)
                 throw new EntityNotFoundException("Movie", movieId);
 
-            var user = await _userRepository.GetByIdAsync(dto.UserId);
+            var user = await _userRepository.GetByIdAsync(userId);
             if (user == null)
-                throw new EntityNotFoundException("User", dto.UserId);
+                throw new EntityNotFoundException("User", userId);
 
             var existing = await _ratingRepository.FindAsync(
-                r => r.MovieId == movieId && r.UserId == dto.UserId);
+                r => r.MovieId == movieId && r.UserId == userId);
 
             MovieRating rating;
 
@@ -62,6 +67,7 @@ namespace MovieRentalApp.Services
                         user.UserId, user.UserName, user.Role.ToString(),
                         $"Removed rating for '{movie.Title}'.", "");
 
+                    await UpdateMovieAverageRating(movieId, movie);
                     return BuildResponse(rating, movie, user, removed: true);
                 }
 
@@ -83,7 +89,7 @@ namespace MovieRentalApp.Services
                 rating = new MovieRating
                 {
                     MovieId = movieId,
-                    UserId = dto.UserId,
+                    UserId = userId,
                     RatingValue = dto.RatingValue,
                     RatedAt = DateTime.UtcNow,
                     IsRemoved = false
@@ -95,7 +101,23 @@ namespace MovieRentalApp.Services
                     $"Rated '{movie.Title}' as '{GetLabel(dto.RatingValue)}'.", "");
             }
 
+            // Sync Movie.Rating with the live average from customer submissions
+            await UpdateMovieAverageRating(movieId, movie);
             return BuildResponse(rating, movie, user, removed: false);
+        }
+
+        // Recalculates Movie.Rating from all active customer ratings
+        private async Task UpdateMovieAverageRating(int movieId, Movie movie)
+        {
+            var allRatings = (await _ratingRepository
+                .FindAsync(r => r.MovieId == movieId && !r.IsRemoved))
+                .ToList();
+
+            movie.Rating = allRatings.Any()
+                ? Math.Round(allRatings.Average(r => r.RatingValue), 1)
+                : 0;
+
+            await _movieRepository.UpdateAsync(movieId, movie);
         }
 
         // ── REMOVE RATING ─────────────────────────────────────────
@@ -215,6 +237,40 @@ namespace MovieRentalApp.Services
                 UserId = userId,
                 UserName = user.UserName,
                 GenrePreferences = preferences
+            };
+        }
+
+        // ── GET PAGINATED RATINGS FOR MOVIE ──────────────────────
+        // Used for "Latest ratings 1–10 per page" on movie detail page
+        public async Task<PagedResultDto<MovieRatingResponseDto>> GetMovieRatingsPaginatedAsync(
+            int movieId, int pageNumber, int pageSize)
+        {
+            var query = _context.MovieRatings
+                .Include(r => r.User)
+                .Include(r => r.Movie)
+                .Where(r => r.MovieId == movieId && !r.IsRemoved)
+                .OrderByDescending(r => r.RatedAt);
+
+            var total = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(total / (double)pageSize);
+
+            var items = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var dtos = items.Select(r => BuildResponse(r, r.Movie!, r.User!, removed: false))
+                            .ToList();
+
+            return new PagedResultDto<MovieRatingResponseDto>
+            {
+                Data = dtos,
+                TotalCount = total,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+                HasNext = pageNumber < totalPages,
+                HasPrevious = pageNumber > 1
             };
         }
 

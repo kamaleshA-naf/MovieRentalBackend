@@ -16,6 +16,11 @@ namespace MovieRentalApp.Models.DTOs
         public string? Director { get; set; }
         public int ReleaseYear { get; set; }
         public double Rating { get; set; }
+
+        [Required(ErrorMessage = "Language is required.")]
+        [MinLength(1, ErrorMessage = "Language cannot be empty.")]
+        public string Language { get; set; } = string.Empty;
+
         public List<int>? GenreIds { get; set; }
         public string? VideoUrl { get; set; }
         public string? ThumbnailUrl { get; set; }

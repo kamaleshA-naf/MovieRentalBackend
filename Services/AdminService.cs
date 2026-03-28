@@ -223,14 +223,17 @@ namespace MovieRentalApp.Services
             MovieId = p.MovieId,
             MovieTitle = p.Movie?.Title ?? "Unknown",
             RentalId = p.RentalId,
-            Amount = p.Amount,
+            Amount = p.Amount < 0 ? 0 : p.Amount,
+            RefundedAmount = p.Amount < 0 ? Math.Abs(p.Amount) : 0,
             Method = p.Method,
             Status = p.Status,
+            FailureReason = p.Status == "Failed" ? p.FailureReason : null,
             PaidAt = p.PaymentDate
         };
 
         private static AuditLogResponseDto MapLog(AuditLog a) => new()
         {
+            Id = a.LogId,
             LogId = a.LogId,
             UserId = a.UserId,
             UserName = a.UserName,
@@ -239,5 +242,159 @@ namespace MovieRentalApp.Services
             ErrorNumber = a.ErrorNumber,
             CreatedAt = a.CreatedAt
         };
+
+        public async Task<IEnumerable<UserResponseDto>> GetUsersTodayAsync()
+        {
+            var start = DateTime.Today;
+            var end = start.AddDays(1);
+
+            var users = await _context.Users
+                .Where(u => u.IsActive && u.CreatedAt >= start && u.CreatedAt < end)
+                .OrderByDescending(u => u.CreatedAt)
+                .ToListAsync();
+
+            return users.Select(u => new UserResponseDto
+            {
+                Id = u.UserId,
+                Name = u.UserName,
+                Email = u.UserEmail,
+                Role = u.Role.ToString(),
+                IsActive = u.IsActive,
+                CreatedAt = u.CreatedAt
+            });
+        }
+
+        // ── PAGINATED USERS ───────────────────────────────────────
+        public async Task<PagedResultDto<UserResponseDto>> GetUsersPaginatedAsync(
+            int pageNumber, int pageSize, string sortBy, string sortDirection)
+        {
+            var query = _context.Users.AsQueryable();
+
+            query = (sortBy?.ToLower(), sortDirection?.ToLower() == "desc") switch
+            {
+                ("createdat", true)  => query.OrderByDescending(u => u.CreatedAt),
+                ("createdat", false) => query.OrderBy(u => u.CreatedAt),
+                ("username",  true)  => query.OrderByDescending(u => u.UserName),
+                _                    => query.OrderBy(u => u.UserName)
+            };
+
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(u => new UserResponseDto
+                {
+                    Id = u.UserId,
+                    Name = u.UserName,
+                    Email = u.UserEmail,
+                    Role = u.Role.ToString(),
+                    IsActive = u.IsActive,
+                    CreatedAt = u.CreatedAt
+                })
+                .ToListAsync();
+
+            return BuildPaged(items, total, pageNumber, pageSize);
+        }
+
+        // ── PAGINATED PAYMENTS ────────────────────────────────────
+        public async Task<PagedResultDto<PaymentDetailDto>> GetPaymentsPaginatedAsync(
+            int pageNumber, int pageSize, string sortBy, string sortDirection)
+        {
+            var query = _context.Payments
+                .Include(p => p.User)
+                .Include(p => p.Movie)
+                .AsQueryable();
+
+            query = (sortBy?.ToLower(), sortDirection?.ToLower() == "desc") switch
+            {
+                ("amount",      true)  => query.OrderByDescending(p => p.Amount),
+                ("amount",      false) => query.OrderBy(p => p.Amount),
+                ("status",      true)  => query.OrderByDescending(p => p.Status),
+                ("status",      false) => query.OrderBy(p => p.Status),
+                ("paymentdate", false) => query.OrderBy(p => p.PaymentDate),
+                _                      => query.OrderByDescending(p => p.PaymentDate)
+            };
+
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return BuildPaged(items.Select(MapPayment).ToList(), total, pageNumber, pageSize);
+        }
+
+        // ── PAGINATED RENTALS ─────────────────────────────────────
+        public async Task<PagedResultDto<RentalResponseDto>> GetRentalsPaginatedAsync(
+            int pageNumber, int pageSize, string sortBy, string sortDirection)
+        {
+            var query = _context.Rentals
+                .Include(r => r.Movie)
+                .Include(r => r.User)
+                .AsQueryable();
+
+            query = (sortBy?.ToLower(), sortDirection?.ToLower() == "desc") switch
+            {
+                ("rentaldate", false) => query.OrderBy(r => r.RentalDate),
+                _                     => query.OrderByDescending(r => r.RentalDate)
+            };
+
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var dtos = items.Select(r => new RentalResponseDto
+            {
+                Id = r.Id,
+                UserId = r.UserId,
+                UserName = r.User?.UserName ?? "",
+                MovieId = r.MovieId,
+                MovieTitle = r.Movie?.Title ?? "Movie Unavailable",
+                RentalDate = r.RentalDate,
+                ExpiryDate = r.ExpiryDate,
+                ReturnDate = r.ReturnDate,
+                Status = r.Status,
+                RentalPrice = r.Movie?.RentalPrice ?? 0,
+                MovieIsActive = r.Movie?.IsActive ?? false
+            }).ToList();
+
+            return BuildPaged(dtos, total, pageNumber, pageSize);
+        }
+
+        // ── PAGINATED LOGS ────────────────────────────────────────
+        public async Task<PagedResultDto<AuditLogResponseDto>> GetLogsPaginatedAsync(
+            int pageNumber, int pageSize)
+        {
+            var query = _context.AuditLogs
+                .OrderByDescending(a => a.CreatedAt)
+                .AsQueryable();
+
+            var total = await query.CountAsync();
+            var items = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return BuildPaged(items.Select(MapLog).ToList(), total, pageNumber, pageSize);
+        }
+
+        // ── HELPER ────────────────────────────────────────────────
+        private static PagedResultDto<T> BuildPaged<T>(
+            List<T> items, int total, int pageNumber, int pageSize)
+        {
+            var totalPages = (int)Math.Ceiling(total / (double)pageSize);
+            return new PagedResultDto<T>
+            {
+                Data = items,
+                TotalCount = total,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+                HasNext = pageNumber < totalPages,
+                HasPrevious = pageNumber > 1
+            };
+        }
     }
 }

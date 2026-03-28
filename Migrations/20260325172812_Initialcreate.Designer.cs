@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MovieRentalApp.Contexts;
 
@@ -11,9 +12,11 @@ using MovieRentalApp.Contexts;
 namespace MovieRentalApp.Migrations
 {
     [DbContext(typeof(MovieContext))]
-    partial class MovieContextModelSnapshot : ModelSnapshot
+    [Migration("20260325172812_Initialcreate")]
+    partial class Initialcreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,83 +24,6 @@ namespace MovieRentalApp.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("Movie", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Director")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Hero")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Language")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Plot")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<double>("Rating")
-                        .HasColumnType("float");
-
-                    b.Property<int>("ReleaseYear")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("RentalPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("Summary")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ThumbnailUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("VideoUrl")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("ViewCount")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Villain")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Director")
-                        .HasDatabaseName("IX_Movie_Director");
-
-                    b.HasIndex("Language")
-                        .HasDatabaseName("IX_Movie_Language");
-
-                    b.HasIndex("ReleaseYear")
-                        .HasDatabaseName("IX_Movie_ReleaseYear");
-
-                    b.HasIndex("Title")
-                        .HasDatabaseName("IX_Movie_Title");
-
-                    b.ToTable("Movies");
-                });
 
             modelBuilder.Entity("MovieRentalApp.Models.AuditLog", b =>
                 {
@@ -186,6 +112,71 @@ namespace MovieRentalApp.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Genres");
+                });
+
+            modelBuilder.Entity("MovieRentalApp.Models.Movie", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Director")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<double>("Rating")
+                        .HasColumnType("float");
+
+                    b.Property<int>("ReleaseYear")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("RentalPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ThumbnailUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("VideoUrl")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Director")
+                        .HasDatabaseName("IX_Movie_Director");
+
+                    b.HasIndex("Language")
+                        .HasDatabaseName("IX_Movie_Language");
+
+                    b.HasIndex("ReleaseYear")
+                        .HasDatabaseName("IX_Movie_ReleaseYear");
+
+                    b.HasIndex("Title")
+                        .HasDatabaseName("IX_Movie_Title");
+
+                    b.ToTable("Movies");
                 });
 
             modelBuilder.Entity("MovieRentalApp.Models.MovieGenre", b =>
@@ -289,9 +280,6 @@ namespace MovieRentalApp.Migrations
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("FailureReason")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Method")
                         .IsRequired()
@@ -440,7 +428,7 @@ namespace MovieRentalApp.Migrations
 
             modelBuilder.Entity("MovieRentalApp.Models.Cart", b =>
                 {
-                    b.HasOne("Movie", "Movie")
+                    b.HasOne("MovieRentalApp.Models.Movie", "Movie")
                         .WithMany()
                         .HasForeignKey("MovieId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -465,7 +453,7 @@ namespace MovieRentalApp.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Movie", "Movie")
+                    b.HasOne("MovieRentalApp.Models.Movie", "Movie")
                         .WithMany("MovieGenres")
                         .HasForeignKey("MovieId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -478,7 +466,7 @@ namespace MovieRentalApp.Migrations
 
             modelBuilder.Entity("MovieRentalApp.Models.MovieRating", b =>
                 {
-                    b.HasOne("Movie", "Movie")
+                    b.HasOne("MovieRentalApp.Models.Movie", "Movie")
                         .WithMany()
                         .HasForeignKey("MovieId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -508,7 +496,7 @@ namespace MovieRentalApp.Migrations
 
             modelBuilder.Entity("MovieRentalApp.Models.Payment", b =>
                 {
-                    b.HasOne("Movie", "Movie")
+                    b.HasOne("MovieRentalApp.Models.Movie", "Movie")
                         .WithMany()
                         .HasForeignKey("MovieId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -527,7 +515,7 @@ namespace MovieRentalApp.Migrations
 
             modelBuilder.Entity("MovieRentalApp.Models.Rental", b =>
                 {
-                    b.HasOne("Movie", "Movie")
+                    b.HasOne("MovieRentalApp.Models.Movie", "Movie")
                         .WithMany("Rentals")
                         .HasForeignKey("MovieId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -546,7 +534,7 @@ namespace MovieRentalApp.Migrations
 
             modelBuilder.Entity("MovieRentalApp.Models.Wishlist", b =>
                 {
-                    b.HasOne("Movie", "Movie")
+                    b.HasOne("MovieRentalApp.Models.Movie", "Movie")
                         .WithMany("Wishlists")
                         .HasForeignKey("MovieId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -563,18 +551,18 @@ namespace MovieRentalApp.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("Movie", b =>
+            modelBuilder.Entity("MovieRentalApp.Models.Genre", b =>
+                {
+                    b.Navigation("MovieGenres");
+                });
+
+            modelBuilder.Entity("MovieRentalApp.Models.Movie", b =>
                 {
                     b.Navigation("MovieGenres");
 
                     b.Navigation("Rentals");
 
                     b.Navigation("Wishlists");
-                });
-
-            modelBuilder.Entity("MovieRentalApp.Models.Genre", b =>
-                {
-                    b.Navigation("MovieGenres");
                 });
 #pragma warning restore 612, 618
         }

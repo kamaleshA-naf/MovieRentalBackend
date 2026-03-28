@@ -9,5 +9,7 @@
         public int NotForMeCount { get; set; }
         public int LikeCount { get; set; }
         public int LoveCount { get; set; }
+        // Paginated latest ratings — populated by GetMovieRatingsPaginated
+        public PagedResultDto<MovieRatingResponseDto>? LatestRatings { get; set; }
     }
 }

@@ -9,5 +9,6 @@ namespace MovieRentalApp.Interfaces
         Task<RentalResponseDto> GetRental(int id);
         Task<IEnumerable<RentalResponseDto>> GetRentalsByUser(int userId);
         Task<IEnumerable<RentalResponseDto>> GetActiveRentals();
+        Task<bool> IsEligibleToRateAsync(int userId, int movieId);
     }
 }

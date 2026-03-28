@@ -7,5 +7,6 @@ namespace MovieRentalApp.Interfaces
         Task<WishlistResponseDto> AddToWishlist(WishlistCreateDto dto);
         Task<IEnumerable<WishlistResponseDto>> GetWishlistByUser(int userId);
         Task RemoveFromWishlist(int wishlistId);
+        Task RemoveByUserAndMovieAsync(int userId, int movieId); // safe — no-op if not found
     }
 }

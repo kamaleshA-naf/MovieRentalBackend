@@ -11,8 +11,10 @@ namespace MovieRentalApp.Models.DTOs
         public int MovieId { get; set; }
 
         [Required]
-        [Range(1, 30,
-            ErrorMessage = "Rental duration must be between 1 and 30 days.")]
+        [Range(1, 30, ErrorMessage = "Rental duration must be between 1 and 30 days.")]
         public int DurationDays { get; set; }
+
+        // UPI / Card / NetBanking — defaults to UPI if not provided
+        public string PaymentMethod { get; set; } = "UPI";
     }
 }

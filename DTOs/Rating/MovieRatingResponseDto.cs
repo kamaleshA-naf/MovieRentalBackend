@@ -11,5 +11,6 @@
         public string RatingLabel { get; set; } = string.Empty;
         public DateTime RatedAt { get; set; }
         public bool IsRemoved { get; set; }
+        public bool CanRate { get; set; }  // true if user has rented+expired/returned this movie
     }
 }
