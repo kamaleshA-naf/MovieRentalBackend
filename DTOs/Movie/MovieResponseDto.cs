@@ -16,5 +16,11 @@
         public int ViewCount { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<GenreResponseDto> Genres { get; set; } = new();
+
+        //extra 
+        public string? Hero { get; set; }
+        public string? Villain { get; set; }
+        public string? Plot { get; set; }
+        public string? Summary { get; set; }
     }
 }

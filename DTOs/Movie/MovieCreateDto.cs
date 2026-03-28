@@ -24,5 +24,11 @@ namespace MovieRentalApp.Models.DTOs
         public List<int>? GenreIds { get; set; }
         public string? VideoUrl { get; set; }
         public string? ThumbnailUrl { get; set; }
+
+        //extra
+        public string? Hero { get; set; }
+        public string? Villain { get; set; }
+        public string? Plot { get; set; }
+        public string? Summary { get; set; }
     }
 }

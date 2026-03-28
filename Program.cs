@@ -40,10 +40,10 @@ namespace MovieRentalApp
             builder.Services.AddScoped<IRepository<int, Cart>, Repository<int, Cart>>();
             builder.Services.AddScoped<IRepository<int, MovieRating>, Repository<int, MovieRating>>();
 
-            // ── Audit Log Service (register BEFORE services that use it) ──
+            // ── Audit Log Service ──────────────────────────────────
             builder.Services.AddScoped<AuditLogService>();
 
-            // ── Business Services ─────────────────────────────────
+            // ── Business Services ──────────────────────────────────
             builder.Services.AddScoped<IPasswordService, PasswordService>();
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IMovieService, MovieService>();
@@ -57,7 +57,15 @@ namespace MovieRentalApp
             builder.Services.AddScoped<ICartService, CartService>();
             builder.Services.AddScoped<IMovieRatingService, MovieRatingService>();
 
-            // ── CORS ──────────────────────────────────────────────
+            // ── Chatbot Service (NEW) ──────────────────────────────
+            builder.Services.AddHttpClient<IChatbotService, ChatbotService>(client =>
+            {
+                var baseUrl = builder.Configuration["PythonAI:BaseUrl"] ?? "http://localhost:8000";
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+
+            // ── CORS ───────────────────────────────────────────────
             builder.Services.AddCors(options =>
             {
                 options.AddDefaultPolicy(policy =>
@@ -68,11 +76,10 @@ namespace MovieRentalApp
                 });
             });
 
-            // ── JWT ───────────────────────────────────────────────
+            // ── JWT ────────────────────────────────────────────────
             var jwtKey = builder.Configuration["Keys:Jwt"] ?? builder.Configuration["keys:Jwt"];
             if (string.IsNullOrEmpty(jwtKey))
-                throw new InvalidOperationException(
-                    "JWT Key is missing from appsettings.json.");
+                throw new InvalidOperationException("JWT Key is missing from appsettings.json.");
 
             builder.Services
                 .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -91,16 +98,15 @@ namespace MovieRentalApp
                     };
                 });
 
-            // ── Rate Limiting ─────────────────────────────────────
+            // ── Rate Limiting ──────────────────────────────────────
             builder.Services.Configure<IpRateLimitOptions>(
                 builder.Configuration.GetSection("IpRateLimiting"));
             builder.Services.AddInMemoryRateLimiting();
             builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
-            // ── MVC / Swagger ─────────────────────────────────────
+            // ── MVC / Swagger ──────────────────────────────────────
             builder.Services.AddControllers();
             builder.Services.AddEndpointsApiExplorer();
-
             builder.Services.AddSwaggerGen(options =>
             {
                 options.SwaggerDoc("v1", new OpenApiInfo
@@ -125,7 +131,7 @@ namespace MovieRentalApp
                             Reference = new OpenApiReference
                             {
                                 Type = ReferenceType.SecurityScheme,
-                                Id   = "Bearer"
+                                Id = "Bearer"
                             }
                         },
                         new string[] {}
@@ -133,16 +139,16 @@ namespace MovieRentalApp
                 });
             });
 
-            // ── Build App ─────────────────────────────────────────
+            // ── Build App ──────────────────────────────────────────
             var app = builder.Build();
 
-            // ── 1. Global Exception Handler ───────────────────────
+            // ── 1. Global Exception Handler ────────────────────────
             app.UseMiddleware<GlobalExceptionMiddleware>();
 
-            // ── 2. CORS — must be first, before auth and routing ──
+            // ── 2. CORS ────────────────────────────────────────────
             app.UseCors();
 
-            // ── 3. Swagger (dev only) ─────────────────────────────
+            // ── 3. Swagger ─────────────────────────────────────────
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -153,10 +159,10 @@ namespace MovieRentalApp
                 });
             }
 
-            // ── 4. HTTPS redirect ─────────────────────────────────
+            // ── 4. HTTPS Redirect ──────────────────────────────────
             app.UseHttpsRedirection();
 
-            // ── 5. Static Files ───────────────────────────────────
+            // ── 5. Static Files ────────────────────────────────────
             var mimeProvider = new FileExtensionContentTypeProvider();
             mimeProvider.Mappings[".mp4"] = "video/mp4";
             mimeProvider.Mappings[".webm"] = "video/webm";
@@ -177,7 +183,7 @@ namespace MovieRentalApp
                 }
             });
 
-            // ── 6. Auth & routing ─────────────────────────────────
+            // ── 6. Auth & Routing ──────────────────────────────────
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseIpRateLimiting();

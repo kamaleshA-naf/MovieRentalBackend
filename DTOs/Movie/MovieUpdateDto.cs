@@ -13,5 +13,13 @@
         public bool? IsActive { get; set; }
         public string? Language { get; set; }
         public List<int>? GenreIds { get; set; }
+
+
+        //extra 
+
+        public string? Hero { get; set; }
+        public string? Villain { get; set; }
+        public string? Plot { get; set; }
+        public string? Summary { get; set; }
     }
 }
