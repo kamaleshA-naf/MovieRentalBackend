@@ -30,11 +30,36 @@ namespace MovieRentalApp.Middleware
             try
             {
                 await _next(context);
+
+                // Intercept 401/403 responses that weren't caught as exceptions
+                // (e.g. missing token — JWT middleware sets status but doesn't throw)
+                if (!context.Response.HasStarted)
+                {
+                    if (context.Response.StatusCode == 401)
+                    {
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsync(
+                            JsonSerializer.Serialize(new
+                            {
+                                statusCode = 401,
+                                message = "Authentication required. Please provide a valid Bearer token."
+                            }));
+                    }
+                    else if (context.Response.StatusCode == 403)
+                    {
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsync(
+                            JsonSerializer.Serialize(new
+                            {
+                                statusCode = 403,
+                                message = "You do not have permission to access this resource."
+                            }));
+                    }
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex,
-                    "Unhandled exception: {Message}", ex.Message);
+                _logger.LogError(ex, "Unhandled exception: {Message}", ex.Message);
                 await HandleExceptionAsync(context, db, ex);
             }
         }

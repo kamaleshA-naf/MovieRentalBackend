@@ -8,5 +8,7 @@
         public int ActiveRentals { get; set; }
         public decimal TotalRevenue { get; set; }
         public int TotalPayments { get; set; }
+        public List<PaymentDetailDto> RecentPayments { get; set; } = new();
+        public List<UserResponseDto> RecentUsers { get; set; } = new();
     }
 }

@@ -87,14 +87,54 @@ namespace MovieRentalApp
                 {
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
+                        ValidateIssuer           = true,
+                        ValidateAudience         = true,
+                        ValidateLifetime         = true,
                         ValidateIssuerSigningKey = true,
-                        ValidIssuer = "MovieRentalApp",
-                        ValidAudience = "MovieRentalApp",
-                        IssuerSigningKey = new SymmetricSecurityKey(
+                        ValidIssuer              = "MovieRentalApp",
+                        ValidAudience            = "MovieRentalApp",
+                        IssuerSigningKey         = new SymmetricSecurityKey(
                             Encoding.UTF8.GetBytes(jwtKey))
+                    };
+
+                    // Return proper JSON on 401/403 instead of blank response
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnChallenge = async ctx =>
+                        {
+                            // Suppress default redirect/challenge
+                            ctx.HandleResponse();
+
+                            if (ctx.Response.HasStarted) return;
+
+                            ctx.Response.StatusCode  = 401;
+                            ctx.Response.ContentType = "application/json";
+
+                            var reason = ctx.AuthenticateFailure?.Message;
+                            var message = string.IsNullOrEmpty(reason)
+                                ? "Authentication required. Please provide a valid token."
+                                : reason.Contains("Lifetime")
+                                    ? "Token has expired. Please log in again."
+                                    : "Invalid token. Please log in again.";
+
+                            await ctx.Response.WriteAsync(
+                                System.Text.Json.JsonSerializer.Serialize(new
+                                {
+                                    statusCode = 401,
+                                    message
+                                }));
+                        },
+                        OnForbidden = async ctx =>
+                        {
+                            ctx.Response.StatusCode  = 403;
+                            ctx.Response.ContentType = "application/json";
+                            await ctx.Response.WriteAsync(
+                                System.Text.Json.JsonSerializer.Serialize(new
+                                {
+                                    statusCode = 403,
+                                    message = "You do not have permission to access this resource."
+                                }));
+                        }
                     };
                 });
 

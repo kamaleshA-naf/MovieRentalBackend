@@ -12,16 +12,32 @@ namespace MovieRentalApp.Interfaces
         Task<IEnumerable<AuditLogResponseDto>> GetLogsByUser(int userId);
         Task<AuditLogResponseDto> CreateLog(int userId, string message, string errorNumber);
         Task<RevenueDto> GetRevenueSummary();
-        Task<IEnumerable<UserResponseDto>> GetUsersTodayAsync();
 
-        // Paginated + sortable admin endpoints
+        // Paginated + filtered + sortable
         Task<PagedResultDto<UserResponseDto>> GetUsersPaginatedAsync(
-            int pageNumber, int pageSize, string sortBy, string sortDirection);
+            int pageNumber, int pageSize,
+            string sortBy, string sortDirection,
+            string? search, string? role);
+
         Task<PagedResultDto<PaymentDetailDto>> GetPaymentsPaginatedAsync(
-            int pageNumber, int pageSize, string sortBy, string sortDirection);
+            int pageNumber, int pageSize,
+            string sortBy, string sortDirection,
+            string? status, string? method);
+
         Task<PagedResultDto<RentalResponseDto>> GetRentalsPaginatedAsync(
-            int pageNumber, int pageSize, string sortBy, string sortDirection);
+            int pageNumber, int pageSize,
+            string sortBy, string sortDirection,
+            string? status);
+
         Task<PagedResultDto<AuditLogResponseDto>> GetLogsPaginatedAsync(
-            int pageNumber, int pageSize);
+            int pageNumber, int pageSize,
+            string sortBy, string sortDirection,
+            string? search);
+
+        Task<PagedResultDto<MovieResponseDto>> GetMoviesPaginatedAsync(
+            int pageNumber, int pageSize,
+            string sortBy, string sortDirection,
+            string? search, int? genreId, string? language,
+            bool? isActive);
     }
 }
