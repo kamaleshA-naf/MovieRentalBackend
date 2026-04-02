@@ -96,22 +96,11 @@ namespace MovieRentalApp.Services
 
             return new LoginResponseDto
             {
-                Token = token,
-                Name = user.UserName,
-                Email = user.UserEmail,
-                Role = user.Role.ToString(),
-                Message = "Login successful."
+                Token = token
             };
         }
 
-        // ── GET USER ──────────────────────────────────────────────
-        public async Task<UserResponseDto> GetUser(int id)
-        {
-            var user = await _userRepository.GetByIdAsync(id);
-            if (user == null)
-                throw new EntityNotFoundException("User", id);
-            return MapToDto(user);
-        }
+        // ── GET USER — REMOVED (not used in frontend) ─────────────
 
         // ── GET ALL ───────────────────────────────────────────────
         public async Task<IEnumerable<UserResponseDto>> GetAllUsers()
@@ -120,19 +109,7 @@ namespace MovieRentalApp.Services
             return users.Select(MapToDto);
         }
 
-        // ── UPDATE ────────────────────────────────────────────────
-        public async Task<UserResponseDto> UpdateUser(int id, UserUpdateDto dto)
-        {
-            var user = await _userRepository.GetByIdAsync(id);
-            if (user == null)
-                throw new EntityNotFoundException("User", id);
-
-            if (!string.IsNullOrWhiteSpace(dto.Name))
-                user.UserName = dto.Name;
-
-            var updated = await _userRepository.UpdateAsync(id, user);
-            return MapToDto(updated!);
-        }
+        // ── UPDATE — REMOVED (not used in frontend) ───────────────
 
         // ── DELETE ────────────────────────────────────────────────
         public async Task<UserResponseDto> DeleteUser(int id)
@@ -143,46 +120,6 @@ namespace MovieRentalApp.Services
 
             await _userRepository.DeleteAsync(id);
             return MapToDto(user);
-        }
-
-        // ── CHANGE PASSWORD ───────────────────────────────────────
-        public async Task<string> ChangePassword(ChangePasswordDto dto)
-        {
-            if (dto.UserId <= 0)
-                throw new BusinessRuleViolationException("Invalid user ID.");
-
-            var user = await _userRepository.GetByIdAsync(dto.UserId);
-            if (user == null)
-                throw new EntityNotFoundException("User", dto.UserId);
-
-            var hashedOld = _passwordService
-                .HashPassword(dto.OldPassword, user.PasswordSaltValue, out _);
-            if (!hashedOld.SequenceEqual(user.Password))
-                throw new UnauthorizedException("Current password is incorrect.");
-
-            if (dto.OldPassword == dto.NewPassword)
-                throw new BusinessRuleViolationException(
-                    "New password cannot be the same as the current password.");
-
-            if (dto.NewPassword.Length < 6)
-                throw new BusinessRuleViolationException(
-                    "New password must be at least 6 characters.");
-
-            var hashedNew = _passwordService
-                .HashPassword(dto.NewPassword, null, out byte[]? newSalt);
-
-            user.Password = hashedNew;
-            user.PasswordSaltValue = newSalt!;
-            await _userRepository.UpdateAsync(user.UserId, user);
-
-            await _auditLog.LogAsync(
-                user.UserId,
-                user.UserName,
-                user.Role.ToString(),
-                $"Password changed successfully for '{user.UserName}'.",
-                "");
-
-            return "Password changed successfully.";
         }
 
         // ── MAPPER ────────────────────────────────────────────────

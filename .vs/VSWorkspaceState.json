@@ -2,8 +2,12 @@
   "ExpandedNodes": [
     "",
     "\\Controllers",
-    "\\Middleware"
+    "\\Middleware",
+    "\\Services",
+    "\\wwwroot",
+    "\\wwwroot\\uploads",
+    "\\wwwroot\\uploads\\movies"
   ],
-  "SelectedNode": "\\Middleware\\GlobalExceptionMiddleware.cs",
+  "SelectedNode": "\\Program.cs",
   "PreviewInSolutionExplorer": false
 }

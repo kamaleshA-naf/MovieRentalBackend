@@ -172,18 +172,7 @@ namespace MovieRentalApp.Services
             return MapToDto(rental, rental.Movie!, rental.User!, refundAmount);
         }
 
-        // ── GET RENTAL ────────────────────────────────────────────
-        public async Task<RentalResponseDto> GetRental(int id)
-        {
-            var rentals = await _rentalRepository
-                .GetAllWithIncludeAsync(r => r.Movie, r => r.User);
-            var rental = rentals.FirstOrDefault(r => r.Id == id);
-            if (rental == null)
-                throw new EntityNotFoundException("Rental", id);
-
-            var paid = await GetTotalPaid(id);
-            return MapToDto(rental, rental.Movie!, rental.User!, totalPaid: paid);
-        }
+        // ── GET RENTAL — REMOVED (not used in frontend) ──────────
 
         // ── GET BY USER ───────────────────────────────────────────
         public async Task<IEnumerable<RentalResponseDto>> GetRentalsByUser(int userId)
@@ -205,15 +194,7 @@ namespace MovieRentalApp.Services
             return result;
         }
 
-        // ── GET ACTIVE ────────────────────────────────────────────
-        public async Task<IEnumerable<RentalResponseDto>> GetActiveRentals()
-        {
-            var rentals = await _rentalRepository
-                .GetAllWithIncludeAsync(r => r.Movie, r => r.User);
-            return rentals
-                .Where(r => r.Status == "Active")
-                .Select(r => MapToDto(r, r.Movie!, r.User!));
-        }
+        // ── GET ACTIVE — REMOVED (not used in frontend) ──────────
 
         // Lookup the original completed payment amount for a rental
         private async Task<decimal> GetTotalPaid(int rentalId)

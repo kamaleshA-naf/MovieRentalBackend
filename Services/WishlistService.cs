@@ -91,7 +91,7 @@ namespace MovieRentalApp.Services
             MovieTitle = movie.Title,
             RentalPrice = movie.RentalPrice,
             AddedDate = w.AddedDate,
-            ThumbnailUrl = movie.ThumbnailUrl   // ← THIS was missing
+            ThumbnailUrl = movie.ThumbnailUrl   
         };
     }
 }

@@ -6,9 +6,7 @@ namespace MovieRentalApp.Interfaces
     {
         Task<RentalResponseDto> RentMovie(RentalCreateDto dto);
         Task<RentalResponseDto> ReturnMovie(int rentalId);
-        Task<RentalResponseDto> GetRental(int id);
         Task<IEnumerable<RentalResponseDto>> GetRentalsByUser(int userId);
-        Task<IEnumerable<RentalResponseDto>> GetActiveRentals();
-        Task<bool> IsEligibleToRateAsync(int userId, int movieId);
+        Task<bool> IsEligibleToRateAsync(int userId, int movieId); // used internally by rating controller
     }
 }

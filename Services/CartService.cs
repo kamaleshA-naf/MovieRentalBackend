@@ -229,65 +229,7 @@ namespace MovieRentalApp.Services
                 await _cartRepository.DeleteAsync(item.Id);
         }
 
-        // ── Analytics ─────────────────────────────────────────────
-        public async Task<CartAnalyticsDto> GetAnalytics()
-        {
-            var allCarts = await _cartRepository.GetAllAsync();
-            var allRentals = await _rentalRepository.GetAllAsync();
-            var allMovies = await _movieRepository.GetAllAsync();
-
-            var totalCartItems = allCarts.Count();
-            var uniqueMovies = allCarts
-                .Select(c => c.MovieId).Distinct().Count();
-
-            var cartGroups = allCarts
-                .GroupBy(c => c.MovieId)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var rentalGroups = allRentals
-                .GroupBy(r => r.MovieId)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var movieDict = allMovies
-                .ToDictionary(m => m.Id, m => m.Title);
-
-            var movieAnalytics = cartGroups.Select(kv =>
-            {
-                var movieId = kv.Key;
-                var cartCount = kv.Value;
-                var rentalCount = rentalGroups.ContainsKey(movieId)
-                    ? rentalGroups[movieId] : 0;
-                var rate = cartCount > 0
-                    ? Math.Round((decimal)rentalCount / cartCount * 100, 1)
-                    : 0;
-                return new CartMovieAnalyticsDto
-                {
-                    MovieId = movieId,
-                    MovieTitle = movieDict.ContainsKey(movieId)
-                                     ? movieDict[movieId] : "Unknown",
-                    CartCount = cartCount,
-                    RentalCount = rentalCount,
-                    ConversionRate = rate
-                };
-            }).ToList();
-
-            var totalRented = allCarts
-                .Count(c => rentalGroups.ContainsKey(c.MovieId));
-            var overallRate = totalCartItems > 0
-                ? Math.Round((decimal)totalRented / totalCartItems * 100, 1)
-                : 0;
-
-            return new CartAnalyticsDto
-            {
-                TotalCartItems = totalCartItems,
-                TotalUniqueMoviesInCarts = uniqueMovies,
-                ConversionRate = overallRate,
-                TopAbandonedMovies = movieAnalytics
-                    .OrderBy(m => m.ConversionRate).Take(5).ToList(),
-                TopCartedMovies = movieAnalytics
-                    .OrderByDescending(m => m.CartCount).Take(5).ToList()
-            };
-        }
+       
 
         // ── Mapper ────────────────────────────────────────────────
         private async Task<CartResponseDto> BuildDto(Cart cart, Movie movie)

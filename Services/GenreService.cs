@@ -34,25 +34,7 @@ namespace MovieRentalApp.Services
         public async Task<IEnumerable<GenreResponseDto>> GetAllGenres()
         {
             var genres = await _genreRepository.GetAllAsync();
-            return genres.Select(g => new GenreResponseDto
-            {
-                Id = g.Id,
-                Name = g.Name
-            });
-        }
-
-        public async Task<GenreResponseDto> DeleteGenre(int id)
-        {
-            if (id <= 0)
-                throw new BusinessRuleViolationException("Invalid genre ID.");
-
-            var genre = await _genreRepository.GetByIdAsync(id);
-            if (genre == null)
-                throw new EntityNotFoundException("Genre", id);
-
-            var dto = new GenreResponseDto { Id = genre.Id, Name = genre.Name };
-            await _genreRepository.DeleteAsync(id);
-            return dto;
+            return genres.Select(g => new GenreResponseDto { Id = g.Id, Name = g.Name });
         }
     }
 }

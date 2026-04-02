@@ -57,7 +57,7 @@ namespace MovieRentalApp
             builder.Services.AddScoped<ICartService, CartService>();
             builder.Services.AddScoped<IMovieRatingService, MovieRatingService>();
 
-            // ── Chatbot Service (NEW) ──────────────────────────────
+            // ── Chatbot Service ────────────────────────────────────
             builder.Services.AddHttpClient<IChatbotService, ChatbotService>(client =>
             {
                 var baseUrl = builder.Configuration["PythonAI:BaseUrl"] ?? "http://localhost:8000";

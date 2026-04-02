@@ -6,6 +6,5 @@ namespace MovieRentalApp.Interfaces
     {
         Task<GenreResponseDto> AddGenre(GenreCreateDto dto);
         Task<IEnumerable<GenreResponseDto>> GetAllGenres();
-        Task<GenreResponseDto> DeleteGenre(int id);
     }
 }

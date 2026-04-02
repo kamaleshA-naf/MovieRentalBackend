@@ -17,7 +17,7 @@ public class Movie
     public int ViewCount { get; set; } = 0;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    // ✅ ADD THESE 4 NEW PROPERTIES:
+   
     public string? Hero { get; set; }
     public string? Villain { get; set; }
     public string? Plot { get; set; }

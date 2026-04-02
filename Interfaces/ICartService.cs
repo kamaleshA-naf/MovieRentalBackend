@@ -10,6 +10,5 @@ namespace MovieRentalApp.Interfaces
         Task<CartResponseDto> UpdateDuration(int cartId, CartUpdateDto dto);
         Task<CartCheckoutResultDto> Checkout(CartCheckoutDto dto);
         Task ClearCart(int userId);
-        Task<CartAnalyticsDto> GetAnalytics();
     }
 }
