@@ -42,6 +42,8 @@ namespace MovieRentalApp.Controllers
             [FromQuery] string? status       = null,
             [FromQuery] string? method       = null)
         {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1 || pageSize > 200) pageSize = 20;
             try
             {
                 var result = await _adminService.GetPaymentsPaginatedAsync(
@@ -56,10 +58,12 @@ namespace MovieRentalApp.Controllers
         public async Task<IActionResult> GetAllLogs(
             [FromQuery] int    pageNumber    = 1,
             [FromQuery] int    pageSize      = 20,
-            [FromQuery] string sortBy        = "createdate",
+            [FromQuery] string sortBy        = "createdat",
             [FromQuery] string sortDirection = "desc",
             [FromQuery] string? search       = null)
         {
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize < 1 || pageSize > 200) pageSize = 20;
             try
             {
                 var result = await _adminService.GetLogsPaginatedAsync(

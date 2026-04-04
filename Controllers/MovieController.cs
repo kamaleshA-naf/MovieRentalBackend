@@ -130,18 +130,28 @@ namespace MovieRentalApp.Controllers
         }
 
         // POST /api/Movie/{id}/view  — increment ViewCount
-        [HttpPost("{id}/view")]
+        [HttpPost("{id:int}/view")]
         [AllowAnonymous]
         public async Task<IActionResult> IncrementView(int id)
         {
             if (id <= 0) return BadRequest(new { message = "Invalid movie ID." });
-            var incremented = await _movieService.IncrementViewCountAsync(id);
-            if (!incremented) return NotFound(new { message = "Movie not found or is inactive." });
-            return Ok(new { message = "View counted." });
+            try
+            {
+                // Check movie exists first for better error message
+                var movie = await _context.Movies.FindAsync(id);
+                if (movie == null)
+                    return NotFound(new { message = $"Movie ID {id} does not exist in DB." });
+                if (!movie.IsActive)
+                    return NotFound(new { message = $"Movie '{movie.Title}' (ID {id}) is inactive." });
+
+                var incremented = await _movieService.IncrementViewCountAsync(id);
+                return Ok(new { message = "View counted.", movieId = id, newViewCount = movie.ViewCount + 1 });
+            }
+            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
         }
 
         // GET /api/Movie/{id}
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         [AllowAnonymous]
         public async Task<IActionResult> GetMovie(int id)
         {
@@ -164,6 +174,11 @@ namespace MovieRentalApp.Controllers
             [FromQuery] double? minRating = null,
             [FromQuery] string sortBy = "Id", [FromQuery] string sortDirection = "desc")
         {
+            // Clamp pagination — prevent negative/zero values crashing Skip/Take
+            if (pageNumber < 1) pageNumber = 1;
+            if (pageSize   < 1) pageSize   = 20;
+            if (pageSize   > 200) pageSize = 200;
+
             var pagination = new PaginationDto { PageNumber = pageNumber, PageSize = pageSize };
             try
             {
@@ -195,7 +210,7 @@ namespace MovieRentalApp.Controllers
         }
 
         // PUT /api/Movie/{id}
-        [HttpPut("{id}")]
+        [HttpPut("{id:int}")]
         [Authorize(Roles = "Admin,ContentManager")]
         public async Task<IActionResult> UpdateMovie(int id, [FromBody] MovieUpdateDto dto)
         {
@@ -218,7 +233,7 @@ namespace MovieRentalApp.Controllers
         }
 
         // DELETE /api/Movie/{id}
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> DeleteMovie(int id)
         {

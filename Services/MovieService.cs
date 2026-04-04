@@ -53,10 +53,7 @@ namespace MovieRentalApp.Services
             return dict;
         }
 
-        private static MovieResponseDto MapToDto(
-            Movie movie,
-            IEnumerable<MovieGenre> movieGenres,
-            Dictionary<int, string> genreDict)
+        private static MovieResponseDto MapToDto(Movie movie,IEnumerable<MovieGenre> movieGenres,Dictionary<int, string> genreDict)
         {
             var genres = movieGenres
                 .Where(mg => mg.MovieId == movie.Id)
@@ -295,6 +292,7 @@ namespace MovieRentalApp.Services
             var movie = await _movieRepository.GetByIdAsync(id);
             if (movie == null)
                 throw new EntityNotFoundException("Movie", id);
+            
 
             movie.IsActive = false;
             await _movieRepository.UpdateAsync(id, movie);
@@ -334,6 +332,13 @@ namespace MovieRentalApp.Services
         // Only increments when IsActive = true (soft-deleted movies have IsActive = false).
         public async Task<bool> IncrementViewCountAsync(int id)
         {
+            // Debug: check if movie exists at all
+            var movie = await _context.Movies.FirstOrDefaultAsync(m => m.Id == id);
+            if (movie == null) return false;   // ID doesn't exist
+
+            // Movie exists but IsActive check
+            if (!movie.IsActive) return false; // soft-deleted
+
             var updated = await _context.Movies
                 .Where(m => m.Id == id && m.IsActive)
                 .ExecuteUpdateAsync(s => s.SetProperty(m => m.ViewCount, m => m.ViewCount + 1));

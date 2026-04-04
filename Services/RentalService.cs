@@ -172,8 +172,7 @@ namespace MovieRentalApp.Services
             return MapToDto(rental, rental.Movie!, rental.User!, refundAmount);
         }
 
-        // ── GET RENTAL — REMOVED (not used in frontend) ──────────
-
+        
         // ── GET BY USER ───────────────────────────────────────────
         public async Task<IEnumerable<RentalResponseDto>> GetRentalsByUser(int userId)
         {
@@ -194,8 +193,6 @@ namespace MovieRentalApp.Services
             return result;
         }
 
-        // ── GET ACTIVE — REMOVED (not used in frontend) ──────────
-
         // Lookup the original completed payment amount for a rental
         private async Task<decimal> GetTotalPaid(int rentalId)
         {
@@ -205,7 +202,6 @@ namespace MovieRentalApp.Services
         }
 
         // ── RATING ELIGIBILITY ────────────────────────────────────
-        // User is eligible to rate if they have a Returned or Expired rental
         public async Task<bool> IsEligibleToRateAsync(int userId, int movieId)
         {
             var rentals = await _rentalRepository.FindAsync(

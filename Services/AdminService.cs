@@ -82,9 +82,15 @@ namespace MovieRentalApp.Services
                 Rentals = rentals.Where(r => r.UserId == u.UserId)
                     .Select(r => new RentalResponseDto
                     {
-                        Id = r.Id, UserId = r.UserId, UserName = u.UserName,
-                        MovieId = r.MovieId, MovieTitle = r.Movie?.Title ?? "",
-                        RentalDate = r.RentalDate, ExpiryDate = r.ExpiryDate, Status = r.Status
+                        Id = r.Id,
+                        UserId = r.UserId,
+                        UserName = u.UserName,
+                        MovieId = r.MovieId,
+                        MovieTitle = r.Movie?.Title ?? "",
+                        RentalDate = r.RentalDate, 
+                        ExpiryDate = r.ExpiryDate,
+                        Status = r.Status
+
                     }).ToList()
             });
         }
@@ -100,7 +106,7 @@ namespace MovieRentalApp.Services
         // ── REVENUE ───────────────────────────────────────────────
         public async Task<RevenueDto> GetRevenueSummary()
         {
-            // Only aggregate counts — no joins, no GroupBy, no full list load
+            
             var totalRevenue = await _context.Payments
                 .Where(p => p.Status == "Completed" && p.Amount > 0)
                 .SumAsync(p => (decimal?)p.Amount) ?? 0;

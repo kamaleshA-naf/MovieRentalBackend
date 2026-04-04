@@ -24,6 +24,7 @@ namespace MovieRentalApp.Services
             if (string.IsNullOrWhiteSpace(movieTitle) || string.IsNullOrWhiteSpace(question))
                 return "Please provide a valid movie title and question.";
 
+
             var prompt  = $"About the movie '{movieTitle}': {question}";
             var payload = new { prompt };
             var json    = JsonSerializer.Serialize(payload);

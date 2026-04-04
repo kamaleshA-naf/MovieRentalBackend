@@ -19,11 +19,11 @@ namespace MovieRentalApp.Services
         /// <summary>
         /// Write an audit log entry to the database.
         /// </summary>
-        /// <param name="userId">The user performing the action (0 = system/anonymous)</param>
-        /// <param name="userName">Display name</param>
-        /// <param name="role">User role string</param>
-        /// <param name="message">Human-readable action description</param>
-        /// <param name="errorNumber">Error code if failure, empty string for success</param>
+        /// <param name="userId"
+        /// <param name="userName"
+        /// <param name="role">
+        /// <param name="message"
+        /// <param name="errorNumber"
         public async Task LogAsync(
             int userId,
             string userName,

@@ -6,9 +6,7 @@ namespace MovieRentalApp.Interfaces
     {
         Task<DashboardStatsDto> GetDashboardStats();
         Task<IEnumerable<UserRentalSummaryDto>> GetAllUsersWithRentals();
-        // TODO: remove or implement — GetAllLogs (non-paginated) was removed from the interface
-        // but still exists in AdminService. Use GetLogsPaginatedAsync instead.
-        //Task<IEnumerable<AuditLogResponseDto>> GetAllLogs();
+        
         Task<RevenueDto> GetRevenueSummary();
 
         Task<PagedResultDto<PaymentDetailDto>> GetPaymentsPaginatedAsync(
