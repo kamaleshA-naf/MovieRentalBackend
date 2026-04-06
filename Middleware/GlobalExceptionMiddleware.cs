@@ -1,130 +1,59 @@
-﻿using MovieRentalApp.Contexts;
-using MovieRentalApp.Exceptions;
-using MovieRentalApp.Middleware;
-using MovieRentalApp.Models;
-using MovieRentalApp.Models.DTOs;
+﻿using MovieRentalApp.Exceptions;
 using System.Diagnostics;
 using System.Net;
-using System.Security.Claims;
 using System.Text.Json;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace MovieRentalApp.Middleware
 {
+    [DebuggerNonUserCode]
     public class GlobalExceptionMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
-        public GlobalExceptionMiddleware(
-            RequestDelegate next,
-            ILogger<GlobalExceptionMiddleware> logger)
+        public GlobalExceptionMiddleware(RequestDelegate next)
         {
             _next = next;
-            _logger = logger;
         }
 
-        public async Task InvokeAsync(
-            HttpContext context, MovieContext db)
+        public async Task InvokeAsync(HttpContext context)
         {
             try
             {
                 await _next(context);
-
-                // Intercept 401/403 responses that weren't caught as exceptions
-                // (e.g. missing token — JWT middleware sets status but doesn't throw)
-                if (!context.Response.HasStarted)
-                {
-                    if (context.Response.StatusCode == 401)
-                    {
-                        context.Response.ContentType = "application/json";
-                        await context.Response.WriteAsync(
-                            JsonSerializer.Serialize(new
-                            {
-                                statusCode = 401,
-                                message = "Authentication required. Please provide a valid Bearer token."
-                            }));
-                    }
-                    else if (context.Response.StatusCode == 403)
-                    {
-                        context.Response.ContentType = "application/json";
-                        await context.Response.WriteAsync(
-                            JsonSerializer.Serialize(new
-                            {
-                                statusCode = 403,
-                                message = "You do not have permission to access this resource."
-                            }));
-                    }
-                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled exception: {Message}", ex.Message);
-                await HandleExceptionAsync(context, db, ex);
+                await HandleExceptionAsync(context, ex);
             }
         }
 
-        private static async Task HandleExceptionAsync(
-            HttpContext context,
-            MovieContext db,
-            Exception ex)
+        private static Task HandleExceptionAsync(HttpContext context, Exception ex)
         {
+            if (context.Response.HasStarted)
+                return Task.CompletedTask;
+
             var statusCode = ex switch
             {
-                EntityNotFoundException => HttpStatusCode.NotFound,
-                DuplicateEntityException => HttpStatusCode.Conflict,
-                BusinessRuleViolationException => HttpStatusCode.BadRequest,
-                UnauthorizedException => HttpStatusCode.Unauthorized,
-                UnableToCreateEntityException => HttpStatusCode.InternalServerError,
-                _ => HttpStatusCode.InternalServerError
+                EntityNotFoundException        => HttpStatusCode.NotFound,
+                UnauthorizedException          => HttpStatusCode.Unauthorized,
+                UnauthorizedAccessException    => HttpStatusCode.Unauthorized,
+                ForbiddenException             => HttpStatusCode.Forbidden,
+                BusinessRuleViolationException => HttpStatusCode.Conflict,
+                DuplicateEntityException       => HttpStatusCode.Conflict,
+                MovieCurrentlyRentedException  => HttpStatusCode.Conflict,
+                ArgumentException              => HttpStatusCode.BadRequest,
+                KeyNotFoundException           => HttpStatusCode.NotFound,
+                _                              => HttpStatusCode.InternalServerError
             };
 
-            if (statusCode == HttpStatusCode.InternalServerError)
-            {
-                try
-                {
-                    var userIdClaim = context.User
-                        .FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    var userName = context.User
-                        .FindFirst(ClaimTypes.Name)?.Value
-                        ?? "Anonymous";
-                    var role = context.User
-                        .FindFirst(ClaimTypes.Role)?.Value
-                        ?? "Anonymous";
-
-                    int.TryParse(userIdClaim, out int userId);
-
-                    if (userId > 0)
-                    {
-                        db.AuditLogs.Add(new AuditLog
-                        {
-                            Message = ex.Message,
-                            ErrorNumber = ex.HResult.ToString(),
-                            Role = role,
-                            UserName = userName,
-                            UserId = userId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                        await db.SaveChangesAsync();
-                    }
-                }
-                catch
-                {
-                    // swallow logging errors
-                }
-            }
-
-            if (context.Response.HasStarted) return;
+            var body = JsonSerializer.Serialize(
+                new { message = ex.Message },
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = (int)statusCode;
+            context.Response.StatusCode  = (int)statusCode;
 
-            await context.Response.WriteAsync(
-                JsonSerializer.Serialize(new
-                {
-                    statusCode = (int)statusCode,      
-                    message = ex.Message
-                }));
+            return context.Response.WriteAsync(body);
         }
     }
 }

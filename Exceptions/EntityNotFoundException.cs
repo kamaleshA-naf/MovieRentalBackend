@@ -1,5 +1,8 @@
-﻿namespace MovieRentalApp.Exceptions
+﻿using System.Diagnostics;
+
+namespace MovieRentalApp.Exceptions
 {
+    [DebuggerNonUserCode]
     public class EntityNotFoundException : Exception
     {
         public EntityNotFoundException(string entityName, object key)

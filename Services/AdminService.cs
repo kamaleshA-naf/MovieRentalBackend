@@ -95,18 +95,9 @@ namespace MovieRentalApp.Services
             });
         }
 
-        // ── LOGS ──────────────────────────────────────────────────
-       
-        public async Task<IEnumerable<AuditLogResponseDto>> GetAllLogs()
-        {
-            var logs = await _auditLogRepository.GetAllWithIncludeAsync(a => a.User);
-            return logs.OrderByDescending(a => a.CreatedAt).Select(MapLog);
-        }
-
         // ── REVENUE ───────────────────────────────────────────────
         public async Task<RevenueDto> GetRevenueSummary()
         {
-            
             var totalRevenue = await _context.Payments
                 .Where(p => p.Status == "Completed" && p.Amount > 0)
                 .SumAsync(p => (decimal?)p.Amount) ?? 0;
@@ -124,20 +115,17 @@ namespace MovieRentalApp.Services
             };
         }
 
-        // ── PAGINATED PAYMENTS (status + method filter) ───────────
-        public async Task<PagedResultDto<PaymentDetailDto>> GetPaymentsPaginatedAsync(
-            int pageNumber, int pageSize,
-            string sortBy, string sortDirection,
-            string? status, string? method)
+        // ── PAGINATED PAYMENTS ────────────────────────────────────
+        public async Task<PagedResultDto<PaymentDetailDto>> GetPayments(GetPaymentsRequestDto request)
         {
             var query = _context.Payments.Include(p => p.User).Include(p => p.Movie).AsQueryable();
 
-            if (!string.IsNullOrWhiteSpace(status))
-                query = query.Where(p => p.Status.ToLower() == status.ToLower());
-            if (!string.IsNullOrWhiteSpace(method))
-                query = query.Where(p => p.Method.ToLower() == method.ToLower());
+            if (!string.IsNullOrWhiteSpace(request.Status))
+                query = query.Where(p => p.Status.ToLower() == request.Status.ToLower());
+            if (!string.IsNullOrWhiteSpace(request.Method))
+                query = query.Where(p => p.Method.ToLower() == request.Method.ToLower());
 
-            query = (sortBy?.ToLower(), sortDirection?.ToLower() == "desc") switch
+            query = (request.SortBy?.ToLower(), request.SortDirection?.ToLower() == "desc") switch
             {
                 ("amount",      true)  => query.OrderByDescending(p => p.Amount),
                 ("amount",      false) => query.OrderBy(p => p.Amount),
@@ -148,28 +136,24 @@ namespace MovieRentalApp.Services
             };
 
             var total = await query.CountAsync();
-            var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
-            return BuildPaged(items.Select(MapPayment).ToList(), total, pageNumber, pageSize);
+            var items = await query.Skip((request.PageNumber - 1) * request.PageSize).Take(request.PageSize).ToListAsync();
+            return BuildPaged(items.Select(MapPayment).ToList(), total, request.PageNumber, request.PageSize);
         }
 
-        // ── PAGINATED LOGS (search + sort) ────────────────────────
-        public async Task<PagedResultDto<AuditLogResponseDto>> GetLogsPaginatedAsync(
-            int pageNumber, int pageSize,
-            string sortBy, string sortDirection,
-            string? search)
+        public async Task<PagedResultDto<AuditLogResponseDto>> GetLogs(GetLogsRequestDto request)
         {
             var query = _context.AuditLogs.AsQueryable();
 
-            if (!string.IsNullOrWhiteSpace(search))
+            if (!string.IsNullOrWhiteSpace(request.Search))
             {
-                var kw = search.ToLower();
+                var kw = request.Search.ToLower();
                 query = query.Where(a =>
                     a.UserName.ToLower().Contains(kw) ||
                     a.Message.ToLower().Contains(kw) ||
                     a.Role.ToLower().Contains(kw));
             }
 
-            query = (sortBy?.ToLower(), sortDirection?.ToLower() == "desc") switch
+            query = (request.SortBy?.ToLower(), request.SortDirection?.ToLower() == "desc") switch
             {
                 ("username",  true)  => query.OrderByDescending(a => a.UserName),
                 ("username",  false) => query.OrderBy(a => a.UserName),
@@ -178,8 +162,8 @@ namespace MovieRentalApp.Services
             };
 
             var total = await query.CountAsync();
-            var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
-            return BuildPaged(items.Select(MapLog).ToList(), total, pageNumber, pageSize);
+            var items = await query.Skip((request.PageNumber - 1) * request.PageSize).Take(request.PageSize).ToListAsync();
+            return BuildPaged(items.Select(MapLog).ToList(), total, request.PageNumber, request.PageSize);
         }
 
         // ── MAPPERS ───────────────────────────────────────────────

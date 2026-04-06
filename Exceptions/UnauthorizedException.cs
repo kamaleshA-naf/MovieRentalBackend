@@ -1,5 +1,8 @@
-﻿namespace MovieRentalApp.Exceptions
+﻿using System.Diagnostics;
+
+namespace MovieRentalApp.Exceptions
 {
+    [DebuggerNonUserCode]
     public class UnauthorizedException : Exception
     {
         public UnauthorizedException()

@@ -1,13 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MovieRentalApp.Exceptions;
 using MovieRentalApp.Interfaces;
 using MovieRentalApp.Models.DTOs;
 
 namespace MovieRentalApp.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     [Authorize]
     public class CartController : ControllerBase
     {
@@ -18,77 +17,48 @@ namespace MovieRentalApp.Controllers
             _cartService = cartService;
         }
 
-        // POST /api/Cart
+        [Authorize(Roles = "Customer")]
         [HttpPost]
-        [Authorize(Roles = "Customer")]
-        public async Task<IActionResult> AddToCart([FromBody] CartAddDto dto)
+        public async Task<ActionResult> AddToCart(CartAddDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            try { return Ok(await _cartService.AddToCart(dto)); }
-            catch (DuplicateEntityException ex) { return Conflict(new { message = ex.Message }); }
-            catch (BusinessRuleViolationException ex) { return BadRequest(new { message = ex.Message }); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _cartService.AddToCart(dto));
         }
 
-        // GET /api/Cart/user/{userId}
+        [Authorize(Roles = "Customer,Admin")]
         [HttpGet("user/{userId}")]
-        [Authorize(Roles = "Customer,Admin")]
-        public async Task<IActionResult> GetCart(int userId)
+        public async Task<ActionResult> GetCart(int userId)
         {
-            if (userId <= 0) return BadRequest(new { message = "Invalid user ID." });
-            try { return Ok(await _cartService.GetCartByUser(userId)); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _cartService.GetCartByUser(userId));
         }
 
-        // DELETE /api/Cart/{id}
-        [HttpDelete("{id}")]
         [Authorize(Roles = "Customer")]
-        public async Task<IActionResult> RemoveFromCart(int id)
-        {
-            if (id <= 0) return BadRequest(new { message = "Invalid cart item ID." });
-            try { await _cartService.RemoveFromCart(id); return Ok(new { message = "Item removed from cart." }); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
-        }
-
-        // PUT /api/Cart/{id}/duration
         [HttpPut("{id}/duration")]
-        [Authorize(Roles = "Customer")]
-        public async Task<IActionResult> UpdateDuration(int id, [FromBody] CartUpdateDto dto)
+        public async Task<ActionResult> UpdateDuration(int id, CartUpdateDto dto)
         {
-            if (id <= 0) return BadRequest(new { message = "Invalid cart item ID." });
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            try { return Ok(await _cartService.UpdateDuration(id, dto)); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (BusinessRuleViolationException ex) { return BadRequest(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _cartService.UpdateDuration(id, dto));
         }
 
-        // POST /api/Cart/checkout
+        [Authorize(Roles = "Customer")]
         [HttpPost("checkout")]
+        public async Task<ActionResult> Checkout(CartCheckoutDto dto)
+        {
+            return Ok(await _cartService.Checkout(dto));
+        }
+
         [Authorize(Roles = "Customer")]
-        public async Task<IActionResult> Checkout([FromBody] CartCheckoutDto dto)
+        [HttpDelete("{id}")]
+        public async Task<ActionResult> RemoveFromCart(int id)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            try { return Ok(await _cartService.Checkout(dto)); }
-            catch (BusinessRuleViolationException ex) { return BadRequest(new { message = ex.Message }); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            await _cartService.RemoveFromCart(id);
+            return Ok(new { message = "Item removed from cart." });
         }
 
-        // DELETE /api/Cart/clear/{userId}
-        [HttpDelete("clear/{userId}")]
         [Authorize(Roles = "Customer,Admin")]
-        public async Task<IActionResult> ClearCart(int userId)
+        [HttpDelete("clear/{userId}")]
+        public async Task<ActionResult> ClearCart(int userId)
         {
-            if (userId <= 0) return BadRequest(new { message = "Invalid user ID." });
-            try { await _cartService.ClearCart(userId); return Ok(new { message = "Cart cleared." }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            await _cartService.ClearCart(userId);
+            return Ok(new { message = "Cart cleared." });
         }
-
-        // TODO: remove or implement — GET /api/Cart/analytics is called by cart.service.ts
-        // (getAnalytics method) but this endpoint does NOT exist in the backend.
     }
 }

@@ -131,7 +131,6 @@ namespace MovieRentalApp.Services
             decimal refundAmount = 0m;
             if (canReturn)
             {
-                // Find the original payment for this rental
                 var payments = await _paymentRepository.FindAsync(
                     p => p.RentalId == rentalId && p.Status == "Completed");
                 var original = payments.FirstOrDefault();
@@ -140,17 +139,24 @@ namespace MovieRentalApp.Services
                 {
                     refundAmount = Math.Round(original.Amount * RefundRate, 2);
 
-                    // Save refund as a separate payment record
-                    await _paymentRepository.AddAsync(new Payment
+                    try
                     {
-                        UserId = rental.UserId,
-                        RentalId = rentalId,
-                        MovieId = rental.MovieId,
-                        Amount = -refundAmount,          // negative = refund
-                        Method = "Refund",
-                        Status = "Refunded",
-                        PaymentDate = DateTime.UtcNow
-                    });
+                        await _paymentRepository.AddAsync(new Payment
+                        {
+                            UserId    = rental.UserId,
+                            RentalId  = rentalId,
+                            MovieId   = rental.MovieId,
+                            Amount    = -refundAmount,
+                            Method    = "Refund",
+                            Status    = "Refunded",
+                            PaymentDate = DateTime.UtcNow
+                        });
+                    }
+                    catch
+                    {
+                        // Refund record failed — do not block the return, reset refund amount
+                        refundAmount = 0m;
+                    }
 
                     _logger.LogInformation(
                         "Refund of ₹{Refund} issued for rental {RentalId} (within {Days:F2} days)",

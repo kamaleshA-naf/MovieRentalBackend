@@ -1,13 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MovieRentalApp.Exceptions;
 using MovieRentalApp.Interfaces;
 using MovieRentalApp.Models.DTOs;
 
 namespace MovieRentalApp.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
@@ -17,48 +16,47 @@ namespace MovieRentalApp.Controllers
             _userService = userService;
         }
 
-        // POST /api/User/register
+        [AllowAnonymous]
         [HttpPost("register")]
-        [AllowAnonymous]
-        public async Task<IActionResult> Register([FromBody] UserCreateDto dto)
+        public async Task<ActionResult> Register(UserCreateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            try { return Ok(await _userService.Register(dto)); }
-            catch (DuplicateEntityException ex) { return Conflict(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            var result = await _userService.Register(dto);
+            return Created($"api/User/{result.Id}", result);
         }
 
-        // POST /api/User/login
+        [AllowAnonymous]
         [HttpPost("login")]
-        [AllowAnonymous]
-        public async Task<IActionResult> Login([FromBody] LoginDto dto)
+        public async Task<ActionResult> Login(LoginDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            try { return Ok(await _userService.Login(dto)); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (UnauthorizedException ex) { return Unauthorized(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            try
+            {
+                var result = await _userService.Login(dto);
+                return Ok(result);
+            }
+            catch (EntityNotFoundException)
+            {
+                // Invalid credentials - return 401 without throwing so debugger won't break on first-chance exceptions
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
+            catch (UnauthorizedException ex)
+            {
+                // Account inactive or other auth-related issues
+                return Unauthorized(new { message = ex.Message });
+            }
         }
 
-        // GET /api/User
+        [Authorize(Roles = "Admin")]
         [HttpGet]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> GetAllUsers()
+        public async Task<ActionResult> GetAllUsers()
         {
-            try { return Ok(await _userService.GetAllUsers()); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _userService.GetAllUsers());
         }
 
-        // DELETE /api/User/{id}
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
-        [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteUser(int id)
+        public async Task<ActionResult> DeleteUser(int id)
         {
-            if (id <= 0) return BadRequest(new { message = "Invalid user ID." });
-            try { return Ok(new { message = "User deleted.", data = await _userService.DeleteUser(id) }); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _userService.DeleteUser(id));
         }
-
     }
 }

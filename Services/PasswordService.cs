@@ -13,35 +13,17 @@ namespace MovieRentalApp.Services
             byte[]? dbHashKey,
             out byte[]? hashkey)
         {
-           
             if (string.IsNullOrEmpty(password))
                 throw new ArgumentException(
-                    "Password cannot be null or empty.",
-                    nameof(password));
+                    "Password cannot be null or empty.", nameof(password));
 
-            HMACSHA256 hmac;
+            using var hmac = dbHashKey == null
+                ? new HMACSHA256()
+                : new HMACSHA256(dbHashKey);
 
-           
-            if (dbHashKey == null)
-            {
-                
-                hmac = new HMACSHA256();
-                hashkey = hmac.Key;
-            }
-            else
-            {
-                
-                hmac = new HMACSHA256(dbHashKey);
-                hashkey = null;
-            }
+            hashkey = dbHashKey == null ? hmac.Key : null;
 
-            
-            var passwordBytes = Encoding.UTF8.GetBytes(password);
-            var hashedPassword = hmac.ComputeHash(passwordBytes);
-
-            
-            hmac.Dispose();
-            return hashedPassword;
+            return hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
         }
     }
 }

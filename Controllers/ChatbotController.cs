@@ -4,8 +4,8 @@ using MovieRentalApp.Interfaces;
 
 namespace MovieRentalApp.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class ChatbotController : ControllerBase
     {
         private readonly IChatbotService _chatbotService;
@@ -16,12 +16,9 @@ namespace MovieRentalApp.Controllers
         }
 
         [HttpPost("ask")]
-        public async Task<IActionResult> Ask([FromBody] ChatRequestDto request)
+        public async Task<ActionResult> Ask(ChatRequestDto request)
         {
-            var answer = await _chatbotService.AskAboutMovieAsync(
-                request.MovieTitle,
-                request.Question
-            );
+            var answer = await _chatbotService.AskAboutMovieAsync(request.MovieTitle, request.Question);
             return Ok(new ChatResponseDto { Answer = answer });
         }
     }

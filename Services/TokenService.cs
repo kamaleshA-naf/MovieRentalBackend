@@ -19,11 +19,11 @@ namespace MovieRentalApp.Services
 
         public string CreateToken(TokenPayloadDto payload)
         {
-            var signingKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(_configuration["Keys:Jwt"]!));
+            var jwtKey = _configuration["Keys:Jwt"]
+                ?? throw new InvalidOperationException("JWT signing key is not configured.");
 
-            var credentials = new SigningCredentials(
-                signingKey, SecurityAlgorithms.HmacSha256);
+            var signingKey  = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+            var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
             {

@@ -127,7 +127,7 @@ namespace MovieRentalApp.Services
 
         // ── GET PAGINATED RATINGS FOR MOVIE ───────────────────────
         public async Task<PagedResultDto<MovieRatingResponseDto>> GetMovieRatingsPaginatedAsync(
-            int movieId, int pageNumber, int pageSize)
+            int movieId, GetMovieRatingsRequestDto request)
         {
             var query = _context.MovieRatings
                 .Include(r => r.User)
@@ -136,18 +136,18 @@ namespace MovieRentalApp.Services
                 .OrderByDescending(r => r.RatedAt);
 
             var total      = await query.CountAsync();
-            var totalPages = (int)Math.Ceiling(total / (double)pageSize);
-            var items      = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+            var totalPages = (int)Math.Ceiling(total / (double)request.PageSize);
+            var items      = await query.Skip((request.PageNumber - 1) * request.PageSize).Take(request.PageSize).ToListAsync();
 
             return new PagedResultDto<MovieRatingResponseDto>
             {
                 Data        = items.Select(r => BuildResponse(r, r.Movie!, r.User!, removed: false)).ToList(),
                 TotalCount  = total,
-                PageNumber  = pageNumber,
-                PageSize    = pageSize,
+                PageNumber  = request.PageNumber,
+                PageSize    = request.PageSize,
                 TotalPages  = totalPages,
-                HasNext     = pageNumber < totalPages,
-                HasPrevious = pageNumber > 1
+                HasNext     = request.PageNumber < totalPages,
+                HasPrevious = request.PageNumber > 1
             };
         }
 

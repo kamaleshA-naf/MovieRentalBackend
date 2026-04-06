@@ -94,6 +94,17 @@ namespace MovieRentalApp.Services
             if (string.IsNullOrWhiteSpace(dto.Language))
                 throw new BusinessRuleViolationException("Language is required.");
 
+            // Duplicate check: same title + release year (case-insensitive, trimmed)
+            var titleNorm = dto.Title.Trim().ToLower();
+
+            var isDuplicate = await _context.Movies.AnyAsync(m =>
+                m.Title.ToLower().Trim() == titleNorm &&
+                m.ReleaseYear            == dto.ReleaseYear);
+
+            if (isDuplicate)
+                throw new BusinessRuleViolationException(
+                    "Movie with the same name and release year already exists.");
+
             await using var tx = await _context.Database.BeginTransactionAsync();
 
             var movie = new Movie
@@ -152,36 +163,28 @@ namespace MovieRentalApp.Services
         }
 
         // ── GET ALL (active only, with filters + sorting) ─────────
-        public async Task<PagedResultDto<MovieResponseDto>> GetAllMovies(
-            PaginationDto pagination,
-            int? genreId = null,
-            string? language = null,
-            double? minRating = null,
-            string sortBy = "Id",
-            string sortDirection = "desc")
+        public async Task<PagedResultDto<MovieResponseDto>> GetMovies(GetMoviesRequestDto request)
         {
-            // Start with active movies — join genres if filtering by genre
             IQueryable<Movie> query;
 
-            if (genreId.HasValue)
+            if (request.GenreId.HasValue)
             {
                 query = _context.Movies
                     .Where(m => m.IsActive &&
-                                m.MovieGenres.Any(mg => mg.GenreId == genreId.Value));
+                                m.MovieGenres.Any(mg => mg.GenreId == request.GenreId.Value));
             }
             else
             {
                 query = _context.Movies.Where(m => m.IsActive);
             }
 
-            if (!string.IsNullOrWhiteSpace(language))
-                query = query.Where(m => m.Language.ToLower() == language.ToLower());
+            if (!string.IsNullOrWhiteSpace(request.Language))
+                query = query.Where(m => m.Language.ToLower() == request.Language.ToLower());
 
-            if (minRating.HasValue)
-                query = query.Where(m => m.Rating >= minRating.Value);
+            if (request.MinRating.HasValue)
+                query = query.Where(m => m.Rating >= request.MinRating.Value);
 
-            // Sorting
-            query = (sortBy?.ToLower(), sortDirection?.ToLower() == "desc") switch
+            query = (request.SortBy?.ToLower(), request.SortDirection?.ToLower() == "desc") switch
             {
                 ("title",  true)  => query.OrderByDescending(m => m.Title),
                 ("title",  false) => query.OrderBy(m => m.Title),
@@ -198,35 +201,34 @@ namespace MovieRentalApp.Services
             if (totalCount == 0)
                 return new PagedResultDto<MovieResponseDto>
                 {
-                    Data = Enumerable.Empty<MovieResponseDto>(),
-                    TotalCount = 0,
-                    PageNumber = pagination.PageNumber,
-                    PageSize = pagination.PageSize,
-                    TotalPages = 0,
-                    HasNext = false,
+                    Data        = Enumerable.Empty<MovieResponseDto>(),
+                    TotalCount  = 0,
+                    PageNumber  = request.PageNumber,
+                    PageSize    = request.PageSize,
+                    TotalPages  = 0,
+                    HasNext     = false,
                     HasPrevious = false
                 };
 
             var movies = await query
-                .Skip((pagination.PageNumber - 1) * pagination.PageSize)
-                .Take(pagination.PageSize)
+                .Skip((request.PageNumber - 1) * request.PageSize)
+                .Take(request.PageSize)
                 .ToListAsync();
 
-            var movieIds = movies.Select(m => m.Id).ToList();
-            var movieGenres = await _movieGenreRepository
-                .FindAsync(mg => movieIds.Contains(mg.MovieId));
-            var genreDict = await BuildGenreDict();
-            var totalPages = (int)Math.Ceiling(totalCount / (double)pagination.PageSize);
+            var movieIds    = movies.Select(m => m.Id).ToList();
+            var movieGenres = await _movieGenreRepository.FindAsync(mg => movieIds.Contains(mg.MovieId));
+            var genreDict   = await BuildGenreDict();
+            var totalPages  = (int)Math.Ceiling(totalCount / (double)request.PageSize);
 
             return new PagedResultDto<MovieResponseDto>
             {
-                Data = movies.Select(m => MapToDto(m, movieGenres, genreDict)),
-                TotalCount = totalCount,
-                PageNumber = pagination.PageNumber,
-                PageSize = pagination.PageSize,
-                TotalPages = totalPages,
-                HasNext = pagination.PageNumber < totalPages,
-                HasPrevious = pagination.PageNumber > 1
+                Data        = movies.Select(m => MapToDto(m, movieGenres, genreDict)),
+                TotalCount  = totalCount,
+                PageNumber  = request.PageNumber,
+                PageSize    = request.PageSize,
+                TotalPages  = totalPages,
+                HasNext     = request.PageNumber < totalPages,
+                HasPrevious = request.PageNumber > 1
             };
         }
 
@@ -283,7 +285,7 @@ namespace MovieRentalApp.Services
             return MapToDto(movie, movieGenres, genreDict);
         }
 
-        // ── SOFT DELETE (sets IsActive=false) ─────────────────────
+        // ── DELETE (sets IsActive=false) ──────────────────────────
         public async Task<MovieResponseDto> DeleteMovie(int id)
         {
             if (id <= 0)
@@ -292,7 +294,14 @@ namespace MovieRentalApp.Services
             var movie = await _movieRepository.GetByIdAsync(id);
             if (movie == null)
                 throw new EntityNotFoundException("Movie", id);
-            
+
+            // Block delete if the movie has ANY rental history (active or past)
+            var hasRentals = await _context.Rentals
+                .AnyAsync(r => r.MovieId == id);
+
+            if (hasRentals)
+                throw new BusinessRuleViolationException(
+                    "Movie is currently rented and cannot be deleted.");
 
             movie.IsActive = false;
             await _movieRepository.UpdateAsync(id, movie);
@@ -304,46 +313,100 @@ namespace MovieRentalApp.Services
         }
 
         // ── TRENDING ─────────────────────────────────────────────
-        // Fetches all in one query ordered by ViewCount descending.
-        // movieIds list comes from the controller (rental-based or fallback).
-        public async Task<IEnumerable<MovieResponseDto>> GetTrendingMovies(
-            List<int> movieIds)
+        // Controller no longer queries DB — service owns the logic entirely
+        public async Task<IEnumerable<MovieResponseDto>> GetTrendingMovies(int top = 10)
         {
-            if (!movieIds.Any())
-                return Enumerable.Empty<MovieResponseDto>();
+            if (top < 1) top = 10;
+            if (top > 50) top = 50;
 
-            // Single query — no N+1
             var movies = await _context.Movies
-                .Where(m => movieIds.Contains(m.Id) && m.IsActive)
+                .Where(m => m.IsActive)
                 .OrderByDescending(m => m.ViewCount)
+                .ThenByDescending(m => m.CreatedAt)
+                .Take(top)
                 .ToListAsync();
 
             if (!movies.Any())
                 return Enumerable.Empty<MovieResponseDto>();
 
-            var ids = movies.Select(m => m.Id).ToList();
+            var ids        = movies.Select(m => m.Id).ToList();
             var movieGenres = await _movieGenreRepository.FindAsync(mg => ids.Contains(mg.MovieId));
-            var genreDict = await BuildGenreDict();
+            var genreDict  = await BuildGenreDict();
 
             return movies.Select(m => MapToDto(m, movieGenres, genreDict));
         }
         // ── INCREMENT VIEW COUNT ──────────────────────────────────
-        // Uses ExecuteUpdateAsync — single SQL UPDATE, no entity load.
-        // Only increments when IsActive = true (soft-deleted movies have IsActive = false).
         public async Task<bool> IncrementViewCountAsync(int id)
         {
-            // Debug: check if movie exists at all
-            var movie = await _context.Movies.FirstOrDefaultAsync(m => m.Id == id);
-            if (movie == null) return false;   // ID doesn't exist
+            // Validate existence first — gives controller a clear result
+            var exists = await _context.Movies.AnyAsync(m => m.Id == id && m.IsActive);
+            if (!exists) return false;
 
-            // Movie exists but IsActive check
-            if (!movie.IsActive) return false; // soft-deleted
-
-            var updated = await _context.Movies
+            await _context.Movies
                 .Where(m => m.Id == id && m.IsActive)
                 .ExecuteUpdateAsync(s => s.SetProperty(m => m.ViewCount, m => m.ViewCount + 1));
 
-            return updated > 0;
+            return true;
+        }
+
+        // ── UPLOAD VIDEO ──────────────────────────────────────────
+        public async Task<string> UploadVideoAsync(int movieId, IFormFile file, string webRootPath)
+        {
+            var movie = await _movieRepository.GetByIdAsync(movieId)
+                ?? throw new EntityNotFoundException("Movie", movieId);
+
+            var folder   = Path.Combine(webRootPath, "uploads", "movies");
+            Directory.CreateDirectory(folder);
+
+            var ext      = Path.GetExtension(file.FileName).ToLower();
+            var fileName = $"movie_{movieId}_{Guid.NewGuid()}{ext}";
+            var filePath = Path.Combine(folder, fileName);
+
+            try
+            {
+                using var stream = new FileStream(filePath, FileMode.Create);
+                await file.CopyToAsync(stream);
+            }
+            catch (IOException ex)
+            {
+                if (File.Exists(filePath)) File.Delete(filePath);
+                throw new BusinessRuleViolationException($"Failed to save video file: {ex.Message}");
+            }
+
+            var videoUrl = $"/uploads/movies/{fileName}";
+            movie.VideoUrl = videoUrl;
+            await _movieRepository.UpdateAsync(movieId, movie);
+            return videoUrl;
+        }
+
+        // ── UPLOAD THUMBNAIL ──────────────────────────────────────
+        public async Task<string> UploadThumbnailAsync(int movieId, IFormFile file, string webRootPath)
+        {
+            var movie = await _movieRepository.GetByIdAsync(movieId)
+                ?? throw new EntityNotFoundException("Movie", movieId);
+
+            var folder   = Path.Combine(webRootPath, "uploads", "thumbnails");
+            Directory.CreateDirectory(folder);
+
+            var ext          = Path.GetExtension(file.FileName).ToLower();
+            var fileName     = $"thumb_{movieId}_{Guid.NewGuid()}{ext}";
+            var filePath     = Path.Combine(folder, fileName);
+
+            try
+            {
+                using var stream = new FileStream(filePath, FileMode.Create);
+                await file.CopyToAsync(stream);
+            }
+            catch (IOException ex)
+            {
+                if (File.Exists(filePath)) File.Delete(filePath);
+                throw new BusinessRuleViolationException($"Failed to save thumbnail file: {ex.Message}");
+            }
+
+            var thumbnailUrl = $"/uploads/thumbnails/{fileName}";
+            movie.ThumbnailUrl = thumbnailUrl;
+            await _movieRepository.UpdateAsync(movieId, movie);
+            return thumbnailUrl;
         }
     }
 }

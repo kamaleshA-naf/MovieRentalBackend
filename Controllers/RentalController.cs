@@ -1,13 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using MovieRentalApp.Exceptions;
 using MovieRentalApp.Interfaces;
 using MovieRentalApp.Models.DTOs;
 
 namespace MovieRentalApp.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     [Authorize]
     public class RentalController : ControllerBase
     {
@@ -18,38 +17,26 @@ namespace MovieRentalApp.Controllers
             _rentalService = rentalService;
         }
 
-        // POST /api/Rental
-        [HttpPost]
         [Authorize(Roles = "Customer")]
-        public async Task<IActionResult> RentMovie([FromBody] RentalCreateDto dto)
+        [HttpPost]
+        public async Task<ActionResult> RentMovie(RentalCreateDto dto)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            try { return Ok(await _rentalService.RentMovie(dto)); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (BusinessRuleViolationException ex) { return BadRequest(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            var result = await _rentalService.RentMovie(dto);
+            return Created($"api/Rental/{result.Id}", result);
         }
 
-        // PUT /api/Rental/{id}/return
+        [Authorize(Roles = "Customer,Admin")]
         [HttpPut("{id}/return")]
-        [Authorize(Roles = "Customer,Admin")]
-        public async Task<IActionResult> ReturnMovie(int id)
+        public async Task<ActionResult> ReturnMovie(int id)
         {
-            if (id <= 0) return BadRequest(new { message = "Invalid rental ID." });
-            try { return Ok(await _rentalService.ReturnMovie(id)); }
-            catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-            catch (BusinessRuleViolationException ex) { return BadRequest(new { message = ex.Message }); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _rentalService.ReturnMovie(id));
         }
 
-        // GET /api/Rental/user/{userId}
-        [HttpGet("user/{userId}")]
         [Authorize(Roles = "Customer,Admin")]
-        public async Task<IActionResult> GetRentalsByUser(int userId)
+        [HttpGet("user/{userId}")]
+        public async Task<ActionResult> GetRentalsByUser(int userId)
         {
-            if (userId <= 0) return BadRequest(new { message = "Invalid user ID." });
-            try { return Ok(await _rentalService.GetRentalsByUser(userId)); }
-            catch (Exception ex) { return StatusCode(500, new { message = ex.Message }); }
+            return Ok(await _rentalService.GetRentalsByUser(userId));
         }
     }
 }
