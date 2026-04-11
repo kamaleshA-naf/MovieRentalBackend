@@ -1,0 +1,18 @@
+resources:
+  pipelines:
+    - pipeline: backendCI
+      source: Movie-rental-backend
+      trigger: true
+
+pool:
+  name: azureagent
+
+steps:
+- download: backendCI
+  artifact: backend
+
+- task: AzureWebApp@1
+  inputs:
+    azureSubscription: 'Azure subscription 1(6b616a04-7b48-46a2-85e2-b00ceb11140e)'
+    appName: 'Movie-rental-backend'
+    package: '$(Pipeline.Workspace)/backend/backend.zip'

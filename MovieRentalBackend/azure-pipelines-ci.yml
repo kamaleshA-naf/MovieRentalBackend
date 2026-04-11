@@ -1,0 +1,52 @@
+trigger:
+- main
+
+pool:
+  name: azureagent
+
+stages:
+
+- stage: Build
+  displayName: Build Backend
+  jobs:
+  - job: BuildJob
+    steps:
+    - task: UseDotNet@2
+      inputs:
+        packageType: sdk
+        version: 8.x  
+
+    - script: dotnet restore
+      displayName: Restore
+
+    - script: dotnet build -c Release
+      displayName: Build
+
+    - script: dotnet publish -c Release -o $(Build.ArtifactStagingDirectory)
+      displayName: Publish
+
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)'
+        artifact: backend
+
+
+- stage: Deploy
+  displayName: Deploy to Azure App Service
+  dependsOn: Build
+  jobs:
+  - deployment: DeployBackend
+    environment: backend-prod
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: backend
+
+          - task: AzureWebApp@1
+            displayName: Deploy Backend
+            inputs:
+              azureSubscription: 'Azure subscription 1(6b616a04-7b48-46a2-85e2-b00ceb11140e)'
+              appName: 'Movie-rental-backend'
+              package: '$(Pipeline.Workspace)/backend'
