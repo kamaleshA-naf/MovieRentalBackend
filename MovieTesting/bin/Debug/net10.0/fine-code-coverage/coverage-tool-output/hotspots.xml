@@ -1,0 +1,63 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Hotspots>
+  <Hotspot>
+    <Assembly>MovieRentalApp</Assembly>
+    <Class>MovieRentalApp.Migrations.Initialcreate</Class>
+    <MethodName>Up(...)</MethodName>
+    <ShortName />
+    <Line>13</Line>
+    <FileIndex>0</FileIndex>
+    <Metrics>
+      <Metric>
+        <Name>Cyclomatic complexity</Name>
+        <Exceeded>true</Exceeded>
+        <Value>44</Value>
+      </Metric>
+    </Metrics>
+  </Hotspot>
+  <Hotspot>
+    <Assembly>MovieRentalApp</Assembly>
+    <Class>MovieRentalApp.Migrations.AddMovieFields</Class>
+    <MethodName>BuildTargetModel(...)</MethodName>
+    <ShortName />
+    <Line>20</Line>
+    <FileIndex>1</FileIndex>
+    <Metrics>
+      <Metric>
+        <Name>Cyclomatic complexity</Name>
+        <Exceeded>true</Exceeded>
+        <Value>42</Value>
+      </Metric>
+    </Metrics>
+  </Hotspot>
+  <Hotspot>
+    <Assembly>MovieRentalApp</Assembly>
+    <Class>MovieRentalApp.Migrations.Initialcreate</Class>
+    <MethodName>BuildTargetModel(...)</MethodName>
+    <ShortName />
+    <Line>20</Line>
+    <FileIndex>1</FileIndex>
+    <Metrics>
+      <Metric>
+        <Name>Cyclomatic complexity</Name>
+        <Exceeded>true</Exceeded>
+        <Value>42</Value>
+      </Metric>
+    </Metrics>
+  </Hotspot>
+  <Hotspot>
+    <Assembly>MovieRentalApp</Assembly>
+    <Class>MovieRentalApp.Migrations.MovieContextModelSnapshot</Class>
+    <MethodName>BuildModel(...)</MethodName>
+    <ShortName />
+    <Line>17</Line>
+    <FileIndex>0</FileIndex>
+    <Metrics>
+      <Metric>
+        <Name>Cyclomatic complexity</Name>
+        <Exceeded>true</Exceeded>
+        <Value>42</Value>
+      </Metric>
+    </Metrics>
+  </Hotspot>
+</Hotspots>
